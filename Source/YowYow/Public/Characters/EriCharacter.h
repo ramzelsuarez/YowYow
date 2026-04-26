@@ -1,0 +1,27 @@
+// Fill out your copyright notice in the Description page of Project Settings.
+
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Characters/CharacterBase.h"
+#include "EriCharacter.generated.h"
+
+/**
+ * This class represents the player character, Eri. We shall pressure planners to never change the name of the main character,
+ * since our code is now sentenced to have this class named like this.
+ *
+ * This class should implement the following components: (besides camera and spring arm)
+ * - UTrickGaugeComponent: only manages the trick gauge and its drain/fill
+ * - UYoyoTrickComponent: should handle the "trick mode" and its inputs
+ * - UHomingAttackComponent: self explanatory (check documentation if not sure about what's a homing attack)
+ *
+ * Eri may or may not require a custom PaperZDAnimInstance component (which will later be instantiated as a BP)
+ * the reason it's that it's much easier to read code than blueprint spaghetti when it comes to calculating all that stuff
+ * and the BP would only "read" the variables in there without any of the ugly stuff ^^
+ */
+UCLASS()
+class YOWYOW_API AEriCharacter : public ACharacterBase
+{
+	GENERATED_BODY()
+	
+};
