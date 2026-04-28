@@ -7,6 +7,10 @@
 #include "Interfaces/Damageable.h"
 #include "CharacterBase.generated.h"
 
+class USpriteDirectionComponent;
+class UHealthComponent;
+class UAttackComponent;
+
 /**
  * this class is the base for all characters in the game, it should implement the following components: (besides obvious movement component etc)
  * - UPaperZDAnimationComponent: self explanatory and needed for all APaperZDCharacter children
@@ -19,5 +23,43 @@ UCLASS()
 class YOWYOW_API ACharacterBase : public APaperZDCharacter, public IDamageable
 {
 	GENERATED_BODY()
-	
+
+public:
+	ACharacterBase();
+
+	virtual void Tick(float DeltaTime) override;
+
+	virtual float TakeDamage(
+		float DamageAmount,
+		FDamageEvent const& DamageEvent,
+		AController* EventInstigator,
+		AActor* DamageCauser
+	) override;
+
+	/*
+	 * Movement actions
+	 */
+	void DoMove(float Right, float Forward);
+
+protected:
+	virtual void BeginPlay() override;
+
+	virtual void Jump() override;
+	virtual void StopJumping() override;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+	UAttackComponent* AttackComponent = nullptr;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+	UHealthComponent* HealthComponent = nullptr;
+
+	/**
+	 * Ana confirmed enemies will have only 1 direction (always face the screen).
+	 * I trust that the graphics team will realize how shit that looks once it's implemented,
+	 * that they will be left with no other option but to provide us with
+	 * full enemy directionality. (at the cost of their sleeping hours)
+	 * That's the reason SpriteDirectionComponent lays in here instead of only on the Eri class.
+	 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+	USpriteDirectionComponent* SpriteDirectionComponent = nullptr;
 };

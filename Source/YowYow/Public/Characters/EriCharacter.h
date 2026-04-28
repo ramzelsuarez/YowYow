@@ -6,6 +6,8 @@
 #include "Characters/CharacterBase.h"
 #include "EriCharacter.generated.h"
 
+class UHomingAttackComponent;
+class UTrickGaugeComponent;
 /**
  * This class represents the player character, Eri. We shall pressure planners to never change the name of the main character,
  * since our code is now sentenced to have this class named like this.
@@ -16,12 +18,23 @@
  * - UHomingAttackComponent: self explanatory (check documentation if not sure about what's a homing attack)
  *
  * Eri may or may not require a custom PaperZDAnimInstance component (which will later be instantiated as a BP)
- * the reason it's that it's much easier to read code than blueprint spaghetti when it comes to calculating all that stuff
+ * the reason is that it's much easier to read code than blueprint spaghetti when it comes to calculating all that stuff
  * and the BP would only "read" the variables in there without any of the ugly stuff ^^
  */
 UCLASS()
 class YOWYOW_API AEriCharacter : public ACharacterBase
 {
 	GENERATED_BODY()
+
+public:
+	
+protected:
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+	UTrickGaugeComponent* TrickGaugeComponent;
+	
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+	UHomingAttackComponent* HomingAttackComponent;
+	
 	
 };

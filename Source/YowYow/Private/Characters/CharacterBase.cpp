@@ -2,4 +2,77 @@
 
 
 #include "Characters/CharacterBase.h"
+#include "ActorComponents/AttackComponent.h"
+#include "ActorComponents/HealthComponent.h"
+#include "ActorComponents/SpriteDirectionComponent.h"
 
+ACharacterBase::ACharacterBase()
+{
+	// Set this character to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
+	PrimaryActorTick.bCanEverTick = true;
+}
+
+void ACharacterBase::Tick(float DeltaTime)
+{
+	Super::Tick(DeltaTime);
+}
+
+void ACharacterBase::BeginPlay()
+{
+	Super::BeginPlay();
+
+	AttackComponent = FindComponentByClass<UAttackComponent>();
+	HealthComponent = FindComponentByClass<UHealthComponent>();
+	SpriteDirectionComponent = FindComponentByClass<USpriteDirectionComponent>();
+}
+
+float ACharacterBase::TakeDamage(
+	float DamageAmount,
+	FDamageEvent const& DamageEvent,
+	AController* EventInstigator,
+	AActor* DamageCauser
+)
+{
+	// take damage is a default UE method for ACharacter
+	// any custom damage-taking logic (i.e should the character take damage at this point?) should go here before the super call
+	
+	return Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
+}
+
+void ACharacterBase::DoMove(float Right, float Forward)
+{
+
+	if (GetController() != nullptr)
+	{
+		const FRotator ControlRotation = GetControlRotation();
+
+		// yaw (horizontal) rotation, create a rotator that represents the controller's rotation
+		// only using yaw because we don't want the character to lay down or else
+		const FRotator YawRotation(0.f, ControlRotation.Yaw, 0.f);
+
+		// given the yaw rotation, give me the X unit in the matrix (forward)
+		// X is forward in UE!!
+		const FVector ForwardDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X);
+
+		// same thing, given the yaw rotation give me the Y, since Y is right in UE
+		const FVector RightDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y);
+
+		// scale that forward by mov vector Y because we have Y axis representing fw/bw directions
+		AddMovementInput(ForwardDirection, Forward);
+		// and scale by our input X, which represents X (horizontal) movement
+		AddMovementInput(RightDirection, Right);
+	}
+}
+
+void ACharacterBase::Jump()
+{
+	// jump is a default UE method for ACharacter
+	// any custom jumping logic (i.e should the character be jumping at this point?) should go here before the super call
+	// same for StopJumping down below
+	Super::Jump();
+}
+
+void ACharacterBase::StopJumping()
+{
+	Super::StopJumping();
+}
