@@ -41,7 +41,6 @@ float ACharacterBase::TakeDamage(
 
 void ACharacterBase::DoMove(float Right, float Forward)
 {
-
 	if (GetController() != nullptr)
 	{
 		const FRotator ControlRotation = GetControlRotation();

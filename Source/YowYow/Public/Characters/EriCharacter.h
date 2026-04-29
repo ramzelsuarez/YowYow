@@ -6,6 +6,10 @@
 #include "Characters/CharacterBase.h"
 #include "EriCharacter.generated.h"
 
+struct FInputActionValue;
+class UInputAction;
+class UCameraComponent;
+class USpringArmComponent;
 class UHomingAttackComponent;
 class UTrickGaugeComponent;
 /**
@@ -27,14 +31,48 @@ class YOWYOW_API AEriCharacter : public ACharacterBase
 	GENERATED_BODY()
 
 public:
-	
-protected:
+	AEriCharacter();
 
+protected:
+	virtual void BeginPlay() override;
+	virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
+	virtual void Tick(float DeltaTime) override;
+
+	/**
+	 * Input Actions 
+	 */
+	UPROPERTY(EditAnywhere, Category="Input Actions|Movement")
+	UInputAction* MovementAction = nullptr;
+	
+	UPROPERTY(EditAnywhere, Category="Input Actions|Movement")
+	UInputAction* JumpAction = nullptr;
+	
+	UPROPERTY(EditAnywhere, Category="Input Actions|Movement")
+	UInputAction* LookAction = nullptr;
+
+	/**
+	 * Input callbacks
+	 */
+	void Move(const FInputActionValue& Value);
+	void JumpPressed();
+	void JumpReleased();
+	void Look(const FInputActionValue& Value);
+	
+	/**
+	 * Actor Components
+	 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
 	UTrickGaugeComponent* TrickGaugeComponent;
-	
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
 	UHomingAttackComponent* HomingAttackComponent;
-	
-	
+
+	/**
+	 * Camera
+	 */
+	UPROPERTY(VisibleAnywhere)
+	USpringArmComponent* CameraBoom;
+
+	UPROPERTY(VisibleAnywhere)
+	UCameraComponent* ViewCamera;
 };
