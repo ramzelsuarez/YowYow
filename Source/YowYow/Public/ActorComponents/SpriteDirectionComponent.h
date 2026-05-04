@@ -6,6 +6,8 @@
 #include "Components/ActorComponent.h"
 #include "SpriteDirectionComponent.generated.h"
 
+class ASpinningRiotCameraManager;
+
 /**
  * This component is supposed to calculate rotation relative to the player (active player controller) owning camera
  * and then update Direction value.
@@ -21,19 +23,31 @@ public:
 	// Sets default values for this component's properties
 	USpriteDirectionComponent();
 
-	// The direction of the sprite (x and y)
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	FVector2D Direction;
+	// Quantized cardinal direction for the current sprite selection.
+	// X = left/right, Y = front/back.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+	FVector2D Direction = FVector2D::ZeroVector;
 
-	// Called every frame
+	// Continuous direction before quantization, useful for debugging or future 8-way sprites.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+	FVector2D RawDirection = FVector2D::ZeroVector;
+
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
 protected:
 	// Called when the game starts
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
-	// this should be called every tick so the sprites for the owning character are always updated.
-	// we COULD optimize to perform the calculation only on camera rotation, but that would require a lot of work
-	// maybe if we have time to spare
+	// Minimum planar speed required before we consider the owner to be moving.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Sprite Direction")
+	float MovementSpeedThreshold = 5.f;
+
+private:
+	void HandleCameraRotationChanged(const FRotator& CameraRotation);
 	void UpdateDirectionFromCamera();
+	FVector2D QuantizeDirection(const FVector2D& InDirection) const;
+
+	ASpinningRiotCameraManager* CameraManager = nullptr;
+	FRotator CachedCameraRotation = FRotator::ZeroRotator;
 };
