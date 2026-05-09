@@ -5,11 +5,18 @@
 #include "ActorComponents/AttackComponent.h"
 #include "ActorComponents/HealthComponent.h"
 #include "ActorComponents/SpriteDirectionComponent.h"
+#include "CameraManagers/SpinningRiotCameraManager.h"
+#include "Kismet/GameplayStatics.h"
+#include "GameFramework/CharacterMovementComponent.h"
+#include "PaperFlipbookComponent.h"
 
 ACharacterBase::ACharacterBase()
 {
-	// Set this character to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
 	PrimaryActorTick.bCanEverTick = true;
+	
+	GetCharacterMovement()->bOrientRotationToMovement = true;
+	GetCharacterMovement()->bUseControllerDesiredRotation = false;
+	GetCharacterMovement()->RotationRate = FRotator(0.f, 400.f, 0.f);
 }
 
 void ACharacterBase::Tick(float DeltaTime)
@@ -24,6 +31,24 @@ void ACharacterBase::BeginPlay()
 	AttackComponent = FindComponentByClass<UAttackComponent>();
 	HealthComponent = FindComponentByClass<UHealthComponent>();
 	SpriteDirectionComponent = FindComponentByClass<USpriteDirectionComponent>();
+
+	CameraManager = Cast<ASpinningRiotCameraManager>(UGameplayStatics::GetPlayerCameraManager(GetWorld(), 0));
+
+	if (CameraManager)
+	{
+		CameraManager->OnCameraRotationChanged.AddUObject(this, &ACharacterBase::HandleCameraRotationChanged);
+		HandleCameraRotationChanged(CameraManager->GetCameraRotation());
+	}
+}
+
+void ACharacterBase::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	if (CameraManager)
+	{
+		CameraManager->OnCameraRotationChanged.RemoveAll(this);
+	}
+
+	Super::EndPlay(EndPlayReason);
 }
 
 float ACharacterBase::TakeDamage(
@@ -35,7 +60,7 @@ float ACharacterBase::TakeDamage(
 {
 	// take damage is a default UE method for ACharacter
 	// any custom damage-taking logic (i.e should the character take damage at this point?) should go here before the super call
-	
+
 	return Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
 }
 
@@ -74,4 +99,14 @@ void ACharacterBase::Jump()
 void ACharacterBase::StopJumping()
 {
 	Super::StopJumping();
+}
+
+void ACharacterBase::HandleCameraRotationChanged(const FRotator &CameraRotation)
+{
+	if (UPaperFlipbookComponent* PaperFlipbookComponent = GetSprite())
+	{
+		// add +90 degrees because the sprite faces "right" by default
+		PaperFlipbookComponent->SetWorldRotation(FRotator(0.f, CameraRotation.Yaw + 90.f, 0.f));
+	}
+	
 }

@@ -7,6 +7,7 @@
 #include "Interfaces/Damageable.h"
 #include "CharacterBase.generated.h"
 
+class ASpinningRiotCameraManager;
 class USpriteDirectionComponent;
 class UHealthComponent;
 class UAttackComponent;
@@ -43,9 +44,12 @@ public:
 
 protected:
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 	virtual void Jump() override;
 	virtual void StopJumping() override;
+
+	ASpinningRiotCameraManager* CameraManager = nullptr;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
 	UAttackComponent* AttackComponent = nullptr;
@@ -62,4 +66,7 @@ protected:
 	 */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
 	USpriteDirectionComponent* SpriteDirectionComponent = nullptr;
+
+private:
+	void HandleCameraRotationChanged(const FRotator &CameraRotation);
 };
