@@ -6,6 +6,7 @@
 #include "Camera/CameraComponent.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "EnhancedInputComponent.h"
+#include "ActorComponents/CharacterStateComponent.h"
 
 AEriCharacter::AEriCharacter()
 {
@@ -59,6 +60,44 @@ void AEriCharacter::Look(const FInputActionValue& Value)
 	AddControllerYawInput(LookVector.X);
 }
 
+void AEriCharacter::TryAttack()
+{
+	// TODO: add any gating to attacking here
+	// TODO: if (HomingAttackComponent->bHasHomingTarget) HomingAttackComponent->DoHomingAttack()
+	
+	DoAttack(EAttackType::Normal);
+}
+
+void AEriCharacter::TryAreaAttack()
+{
+	// TODO: add any gating to area attacking here
+	DoAttack(EAttackType::Area);
+}
+
+void AEriCharacter::EnterTrickMode()
+{
+	CharacterStateComponent->SetActionState(ECharacterActionState::Trick);
+	
+	// TODO: TrickGaugeComponent->DoEnterTrickMode()
+}
+
+void AEriCharacter::ExitTrickMode()
+{
+	CharacterStateComponent->SetActionState(ECharacterActionState::Default);
+
+	// TODO: TrickGaugeComponent->DoExitTrickMode();
+}
+
+void AEriCharacter::TryTrickInput(const FInputActionValue& Value)
+{
+	if (CharacterStateComponent->GetActionState() == ECharacterActionState::Trick)
+	{
+		FVector2D TrickInputVector = Value.Get<FVector2D>();
+
+		// TODO: TrickGaugeComponent->RegisterTrickInput(TrickInputVector);
+	}
+}
+
 void AEriCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
 	Super::SetupPlayerInputComponent(PlayerInputComponent);
@@ -81,6 +120,27 @@ void AEriCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompon
 		{
 			EnhancedInputComponent->BindAction(JumpAction, ETriggerEvent::Started, this, &AEriCharacter::JumpPressed);
 			EnhancedInputComponent->BindAction(JumpAction, ETriggerEvent::Completed, this, &AEriCharacter::JumpReleased);
+		}
+
+		// combat actions
+		if (AttackAction)
+		{
+			EnhancedInputComponent->BindAction(AttackAction, ETriggerEvent::Triggered, this, &AEriCharacter::TryAttack);
+		}
+		if (AreaAttackAction)
+		{
+			EnhancedInputComponent->BindAction(AttackAction, ETriggerEvent::Triggered, this, &AEriCharacter::TryAreaAttack);
+		}
+
+		// trick gauge action
+		if (TrickModeAction)
+		{
+			EnhancedInputComponent->BindAction(TrickModeAction, ETriggerEvent::Started, this, &AEriCharacter::EnterTrickMode);
+			EnhancedInputComponent->BindAction(TrickModeAction, ETriggerEvent::Completed, this, &AEriCharacter::ExitTrickMode);
+		}
+		if (TrickInputAction)
+		{
+			EnhancedInputComponent->BindAction(TrickInputAction, ETriggerEvent::Triggered, this, &AEriCharacter::TryTrickInput);
 		}
 	}
 }

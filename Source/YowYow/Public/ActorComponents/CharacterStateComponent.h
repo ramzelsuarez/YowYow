@@ -56,7 +56,7 @@ protected:
 
 private:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, meta=(AllowPrivateAccess="true"))
-	ECharacterActionState ActionState = ECharacterActionState::Normal;
+	ECharacterActionState ActionState = ECharacterActionState::Default;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, meta=(AllowPrivateAccess="true"))
 	ECharacterLocomotionState LocomotionState = ECharacterLocomotionState::Grounded;

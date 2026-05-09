@@ -50,6 +50,18 @@ protected:
 	UPROPERTY(EditAnywhere, Category="Input Actions|Movement")
 	UInputAction* LookAction = nullptr;
 
+	UPROPERTY(EditAnywhere, Category="Input Actions|Combat")
+	UInputAction* AttackAction = nullptr;
+
+	UPROPERTY(EditAnywhere, Category="Input Actions|Combat")
+	UInputAction* AreaAttackAction = nullptr;
+
+	UPROPERTY(EditAnywhere, Category="Input Actions|Trick")
+	UInputAction* TrickModeAction = nullptr;
+
+	UPROPERTY(EditAnywhere, Category="Input Actions|Trick")
+	UInputAction* TrickInputAction = nullptr;
+
 	/**
 	 * Input callbacks
 	 */
@@ -57,6 +69,11 @@ protected:
 	void JumpPressed();
 	void JumpReleased();
 	void Look(const FInputActionValue& Value);
+	void TryAttack();
+	void TryAreaAttack();
+	void EnterTrickMode();
+	void ExitTrickMode();
+	void TryTrickInput(const FInputActionValue& Value);
 	
 	/**
 	 * Actor Components

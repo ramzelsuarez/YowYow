@@ -9,7 +9,9 @@
 UENUM(BlueprintType)
 enum class ECharacterActionState : uint8
 {
-	Normal UMETA(DisplayName = "Normal"),
+	Default UMETA(DisplayName = "Default"),
+	// Attacking should represent any attack that's not a homing attack
+	Attacking UMETA(DisplayName = "Attacking"),
 
 	// Trick and homing are only used by Eri
 	Trick UMETA(DisplayName = "Trick"),
@@ -34,12 +36,12 @@ UENUM(BlueprintType)
 enum class ECharacterLocomotionState : uint8
 {
 	Grounded UMETA(DisplayName = "Grounded"),
-	Jumping UMETA(DisplayName = "Jumping"),
-	Falling UMETA(DisplayName = "Falling"),
+	Airborne UMETA(DisplayName = "Airborne"),
 };
 
 /*
  * Generic attack phase state
+ * Will probably get rid of this in favor of one that lives within the AttackComponent
  */
 UENUM(BlueprintType)
 enum class ECharacterAttackState : uint8
