@@ -55,31 +55,13 @@ void USpriteDirectionComponent::UpdateDirectionFromCamera()
 	const FRotator CameraYawRotation(0.f, CachedCameraRotation.Yaw, 0.f);
 	const FVector CameraForward = FRotationMatrix(CameraYawRotation).GetUnitAxis(EAxis::X);
 	const FVector CameraRight = FRotationMatrix(CameraYawRotation).GetUnitAxis(EAxis::Y);
+	const FVector OwnerForward = Owner->GetActorForwardVector();
 
-	const FVector Velocity = Owner->GetVelocity();
-	const FVector HorizontalVelocity(Velocity.X, Velocity.Y, 0.f);
-	const bool bIsMoving = HorizontalVelocity.SizeSquared() > FMath::Square(MovementSpeedThreshold);
-
-	if (bIsMoving)
-	{
-		const FVector MoveDirection = HorizontalVelocity.GetSafeNormal();
-
-		RawDirection = FVector2D(
-			FVector::DotProduct(MoveDirection, CameraRight),
-			FVector::DotProduct(MoveDirection, CameraForward)
-		);
-	}
-	else
-	{
-		// While idle, choose the sprite from the camera angle relative to the actor basis so
-		// rotating the camera still swaps front/back/left/right and preserves the 2.5D illusion.
-		const FVector ViewDirection = (-CameraForward).GetSafeNormal();
-
-		RawDirection = FVector2D(
-			FVector::DotProduct(ViewDirection, Owner->GetActorRightVector()),
-			FVector::DotProduct(ViewDirection, Owner->GetActorForwardVector())
-		);
-	}
+	FVector2D RawDirection = FVector2D(
+		FVector::DotProduct(OwnerForward, CameraRight),
+		// make forward slightly smaller so that side sprites are dominant, but check later which one looks better 
+		FVector::DotProduct(OwnerForward, CameraForward * 0.999f)
+	);
 
 	Direction = QuantizeDirection(RawDirection);
 }

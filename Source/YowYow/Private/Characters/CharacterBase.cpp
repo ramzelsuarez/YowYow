@@ -7,12 +7,16 @@
 #include "ActorComponents/SpriteDirectionComponent.h"
 #include "CameraManagers/SpinningRiotCameraManager.h"
 #include "Kismet/GameplayStatics.h"
+#include "GameFramework/CharacterMovementComponent.h"
 #include "PaperFlipbookComponent.h"
 
 ACharacterBase::ACharacterBase()
 {
-	// Set this character to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
 	PrimaryActorTick.bCanEverTick = true;
+	
+	GetCharacterMovement()->bOrientRotationToMovement = true;
+	GetCharacterMovement()->bUseControllerDesiredRotation = false;
+	GetCharacterMovement()->RotationRate = FRotator(0.f, 400.f, 0.f);
 }
 
 void ACharacterBase::Tick(float DeltaTime)

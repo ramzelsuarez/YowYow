@@ -23,14 +23,10 @@ public:
 	// Sets default values for this component's properties
 	USpriteDirectionComponent();
 
-	// Quantized cardinal direction for the current sprite selection.
+	// Calculated cardinal direction for the current sprite selection.
 	// X = left/right, Y = front/back.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
 	FVector2D Direction = FVector2D::ZeroVector;
-
-	// Continuous direction before quantization, useful for debugging or future 8-way sprites.
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
-	FVector2D RawDirection = FVector2D::ZeroVector;
 
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
@@ -38,10 +34,6 @@ protected:
 	// Called when the game starts
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
-
-	// Minimum planar speed required before we consider the owner to be moving.
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Sprite Direction")
-	float MovementSpeedThreshold = 5.f;
 
 private:
 	void HandleCameraRotationChanged(const FRotator& CameraRotation);
