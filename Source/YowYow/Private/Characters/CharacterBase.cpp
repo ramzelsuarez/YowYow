@@ -9,6 +9,7 @@
 #include "Kismet/GameplayStatics.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "PaperFlipbookComponent.h"
+#include "ActorComponents/CharacterStateComponent.h"
 
 ACharacterBase::ACharacterBase()
 {
@@ -30,7 +31,11 @@ void ACharacterBase::BeginPlay()
 
 	AttackComponent = FindComponentByClass<UAttackComponent>();
 	HealthComponent = FindComponentByClass<UHealthComponent>();
+	CharacterStateComponent = FindComponentByClass<UCharacterStateComponent>();
 	SpriteDirectionComponent = FindComponentByClass<USpriteDirectionComponent>();
+
+	LandedDelegate.AddDynamic(this, &ACharacterBase::HandleLanded);
+	MovementModeChangedDelegate.AddDynamic(this, &ACharacterBase::HandleMovementModeChanged);
 
 	CameraManager = Cast<ASpinningRiotCameraManager>(UGameplayStatics::GetPlayerCameraManager(GetWorld(), 0));
 
@@ -43,6 +48,9 @@ void ACharacterBase::BeginPlay()
 
 void ACharacterBase::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	LandedDelegate.RemoveDynamic(this, &ACharacterBase::HandleLanded);
+	MovementModeChangedDelegate.RemoveDynamic(this, &ACharacterBase::HandleMovementModeChanged);
+
 	if (CameraManager)
 	{
 		CameraManager->OnCameraRotationChanged.RemoveAll(this);
@@ -88,6 +96,17 @@ void ACharacterBase::DoMove(float Right, float Forward)
 	}
 }
 
+void ACharacterBase::DoAttack(EAttackType AttackType)
+{
+	if (AttackComponent && CharacterStateComponent)
+	{
+		CharacterStateComponent->SetAttackState(ECharacterAttackState::Attacking);
+
+		// TODO: either play animation or set a variable for attack so ABP can read it
+		// TODO: call AttackComponent->TryAttack(AttackType) or something like that
+	}
+}
+
 void ACharacterBase::Jump()
 {
 	// jump is a default UE method for ACharacter
@@ -109,4 +128,27 @@ void ACharacterBase::HandleCameraRotationChanged(const FRotator &CameraRotation)
 		PaperFlipbookComponent->SetWorldRotation(FRotator(0.f, CameraRotation.Yaw + 90.f, 0.f));
 	}
 	
+}
+
+void ACharacterBase::HandleMovementModeChanged(ACharacter* Character, EMovementMode PrevMovementMode, uint8 PreviousCustomMode)
+{
+	if (!CharacterStateComponent || Character != this)
+	{
+		return;
+	}
+
+	const EMovementMode CurrentMovementMode = GetCharacterMovement()->MovementMode;
+
+	if (CurrentMovementMode == MOVE_Falling)
+	{
+		CharacterStateComponent->SetLocomotionState(ECharacterLocomotionState::Airborne);
+	}
+}
+
+void ACharacterBase::HandleLanded(const FHitResult& Hit)
+{
+	if (CharacterStateComponent)
+	{
+		CharacterStateComponent->SetLocomotionState(ECharacterLocomotionState::Grounded);
+	}
 }

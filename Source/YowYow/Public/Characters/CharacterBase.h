@@ -5,8 +5,11 @@
 #include "CoreMinimal.h"
 #include "PaperZDCharacter.h"
 #include "Interfaces/Damageable.h"
+#include "Types/AttackTypes.h"
+#include "GameFramework/CharacterMovementComponent.h"
 #include "CharacterBase.generated.h"
 
+class UCharacterStateComponent;
 class ASpinningRiotCameraManager;
 class USpriteDirectionComponent;
 class UHealthComponent;
@@ -19,6 +22,10 @@ class UAttackComponent;
  * - UAttackComponent: self explanatory / avoid if we have npcs (not sure if we will have them, but those don't attack and that would make this base character even simpler)
  * - USpriteDirectionComponent: component that will cache the player's camera, get its direction, compare it to this character's forward
  *		and generate sprite directionality based on it. The PaperZD ABP should consume from it to display the correct sprite
+ * - UCharacterStateComponent: it dictates general states that will help us determine if certain actions can be performed at certain points
+ *		Example: you can't move while attacking, or you can't attack while airborne (can only homing attack); etc.
+ *		Try to keep the states simple. For more meticulous states like stages of attacking (start, active, canCombo, recovery, etc) we can calculate that, for example,
+ *		in the attack component. These are super basic general states to determine if a character can perform certain actions.
  */
 UCLASS()
 class YOWYOW_API ACharacterBase : public APaperZDCharacter, public IDamageable
@@ -42,6 +49,12 @@ public:
 	 */
 	void DoMove(float Right, float Forward);
 
+	/**
+	 * Attack actions
+	 */
+	// default attack is normal since it's the most common usage and the only one enemies will use (probably)
+	void DoAttack(EAttackType AttackType = EAttackType::Normal);
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
@@ -49,6 +62,7 @@ protected:
 	virtual void Jump() override;
 	virtual void StopJumping() override;
 
+	UPROPERTY()
 	ASpinningRiotCameraManager* CameraManager = nullptr;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
@@ -56,6 +70,9 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
 	UHealthComponent* HealthComponent = nullptr;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+	UCharacterStateComponent* CharacterStateComponent = nullptr;
 
 	/**
 	 * Ana confirmed enemies will have only 1 direction (always face the screen).
@@ -69,4 +86,10 @@ protected:
 
 private:
 	void HandleCameraRotationChanged(const FRotator &CameraRotation);
+
+	UFUNCTION()
+	void HandleMovementModeChanged(ACharacter* Character, EMovementMode PrevMovementMode, uint8 PreviousCustomMode);
+	
+	UFUNCTION()
+	void HandleLanded(const FHitResult& Hit);
 };
