@@ -4,3 +4,7 @@
 #include "Interfaces/Pickupable.h"
 
 // Add default functionality here for any IPickupable functions that are not pure virtual.
+
+void IPickupable::SetOverlappingItem(AItem* Item)
+{
+}
