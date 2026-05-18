@@ -5,6 +5,6 @@
 
 // Add default functionality here for any IPickupable functions that are not pure virtual.
 
-void IPickupable::SetOverlappingItem(AItem* Item)
+void IPickupable::SetOverlappingItem(AItemBase* Item)
 {
 }
