@@ -29,6 +29,13 @@ AEriCharacter::AEriCharacter()
 void AEriCharacter::BeginPlay()
 {
 	Super::BeginPlay();
+
+	HomingAttackComponent = FindComponentByClass<UHomingAttackComponent>();
+
+	if (HomingAttackComponent)
+	{
+		HomingAttackComponent->OnHomingAttackFinished.AddDynamic(this, &AEriCharacter::HandleHomingAttackFinished);
+	}
 }
 
 void AEriCharacter::Tick(float DeltaTime)
@@ -65,8 +72,13 @@ void AEriCharacter::TryAttack()
 {
 	// TODO: add any gating to attacking here
 	// TODO: if (HomingAttackComponent->bHasHomingTarget) HomingAttackComponent->DoHomingAttack()
-	if (HomingAttackComponent->GetHomingState() == EHomingState::TargetFound)
+	if (HomingAttackComponent && HomingAttackComponent->GetHomingState() == EHomingState::TargetFound)
 	{
+		if (CharacterStateComponent)
+		{
+			CharacterStateComponent->SetActionState(ECharacterActionState::Homing);
+		}
+
 		HomingAttackComponent->DoHomingAttack();
 	}
 	else
@@ -105,6 +117,13 @@ void AEriCharacter::TryTrickInput(const FInputActionValue& Value)
 	}
 }
 
+void AEriCharacter::HandleHomingAttackFinished(const bool bSuccess)
+{
+	// TODO: provide better calculation depending on what actually happened
+	CharacterStateComponent->SetLocomotionState(bSuccess ? ECharacterLocomotionState::Airborne : ECharacterLocomotionState::Grounded);
+	CharacterStateComponent->SetActionState(ECharacterActionState::Default);
+}
+
 void AEriCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
 	Super::SetupPlayerInputComponent(PlayerInputComponent);
@@ -137,7 +156,7 @@ void AEriCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompon
 		}
 		if (AreaAttackAction)
 		{
-			EnhancedInputComponent->BindAction(AttackAction, ETriggerEvent::Triggered, this,
+			EnhancedInputComponent->BindAction(AreaAttackAction, ETriggerEvent::Triggered, this,
 			                                   &AEriCharacter::TryAreaAttack);
 		}
 

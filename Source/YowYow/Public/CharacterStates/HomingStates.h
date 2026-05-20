@@ -13,6 +13,9 @@ enum class EHomingState : uint8 {
 	// in air, target found
 	TargetFound UMETA(DisplayName = "TargetFound"),
 
+	// previous step to doing the homing motion. Launching the yoyo etc
+	Charging UMETA(DisplayName = "Charging"),
+
 	// actually doing the homing motion
 	Launching UMETA(DisplayName = "Launching"),
 
