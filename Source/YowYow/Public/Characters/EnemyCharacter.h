@@ -17,5 +17,13 @@ UCLASS()
 class YOWYOW_API AEnemyCharacter : public ACharacterBase, public IHomingable
 {
 	GENERATED_BODY()
-	
+
+public:
+	virtual bool GetIsHomingTargeted_Implementation() override;
+	virtual void SetHomingTargeted_Implementation(bool bTargeted) override;
+	virtual bool CanBeHomed_Implementation() const override;
+	virtual FVector GetTargetLocation_Implementation() override;
+
+private:
+	bool bIsHomingTargeted = false;
 };

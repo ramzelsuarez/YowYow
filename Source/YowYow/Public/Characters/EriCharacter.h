@@ -85,6 +85,12 @@ protected:
 	UHomingAttackComponent* HomingAttackComponent;
 
 	/**
+	 * Actor Component events
+	 */
+	UFUNCTION()
+	void HandleHomingAttackFinished(const bool bSuccess);
+
+	/**
 	 * Camera
 	 */
 	UPROPERTY(VisibleAnywhere)
