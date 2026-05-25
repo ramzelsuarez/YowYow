@@ -23,6 +23,8 @@ AEriCharacter::AEriCharacter()
 
 	ViewCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("ViewCamera"));
 	ViewCamera->SetupAttachment(CameraBoom);
+
+	//UCapsuleComponent* Capsule = GetComponentByClass<UCapsuleComponent>()
 }
 
 void AEriCharacter::BeginPlay()

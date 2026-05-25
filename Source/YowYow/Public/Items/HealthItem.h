@@ -7,11 +7,11 @@
 #include "Components/SphereComponent.h"
 #include "HealthItem.generated.h"
 
-
+class UNiagaraComponent;
 
 
 UCLASS()
-class YOWYOW_API AHealthItem : public AItemBase
+class YOWYOW_API AHealthItem : public AItemBase, public IPickupable
 {
 	GENERATED_BODY()
 protected:
@@ -20,5 +20,17 @@ private:
 	UPROPERTY(EditAnywhere, Category = Items)
 	int32 Health;
 public:
-	FORCEINLINE int32 GetHealth() const { return Health;  }
+	FORCEINLINE int32 GetHealth() const { return Health; }
+	FORCEINLINE void SetHealth(int32 NumberOfHealth) { Health = NumberOfHealth; }
+
+	//virtual void Pickup_Execute();
+
+	/*AealthItem::Pickup_Execute() {
+		Destroy();
+
+		GrantEffect(EItemEffects::RecoverHealth)
+
+
+			asdasdsa::GrantEffect(EItemEffect* Effect) {
+			AEriCharacter* Target->ReceiveEffects(Effect) ZEL deliv - work on the item pickup system*/
 };
