@@ -7,9 +7,6 @@
 #include "Components/SphereComponent.h"
 #include "HealthItem.generated.h"
 
-
-
-
 UCLASS()
 class YOWYOW_API AHealthItem : public AItemBase
 {
