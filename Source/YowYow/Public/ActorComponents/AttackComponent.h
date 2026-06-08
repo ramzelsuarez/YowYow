@@ -25,6 +25,9 @@ class YOWYOW_API UAttackComponent : public UActorComponent
 public:	
 	// Sets default values for this component's properties
 	UAttackComponent();
+	
+	UFUNCTION()
+	void TryAttack();
 
 protected:
 	// Called when the game starts

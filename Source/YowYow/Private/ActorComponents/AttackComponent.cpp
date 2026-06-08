@@ -13,6 +13,11 @@ UAttackComponent::UAttackComponent()
 	// ...
 }
 
+void UAttackComponent::TryAttack()
+{
+	
+}
+
 
 // Called when the game starts
 void UAttackComponent::BeginPlay()
