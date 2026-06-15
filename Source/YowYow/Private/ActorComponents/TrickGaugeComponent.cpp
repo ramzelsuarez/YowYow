@@ -1,34 +1,42 @@
 // Fill out your copyright notice in the Description page of Project Settings.
+// Temporary simple gauge implementation for item pickup testing.
+// To Franco: you can replace/expand this later with drain, trick mode logic, UI, etc. hehe - Zellybananalicioso
 
 
 #include "ActorComponents/TrickGaugeComponent.h"
 
-// Sets default values for this component's properties
 UTrickGaugeComponent::UTrickGaugeComponent()
 {
-	// Set this component to be initialized when the game starts, and to be ticked every frame.  You can turn these features
-	// off to improve performance if you don't need them.
-	PrimaryComponentTick.bCanEverTick = true;
-
-	// ...
+	PrimaryComponentTick.bCanEverTick = false;
 }
 
-
-// Called when the game starts
 void UTrickGaugeComponent::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// ...
-	
+	CurrentGauge = FMath::Clamp(CurrentGauge, 0.f, MaxGauge);
+	OnTrickGaugeChanged.Broadcast(CurrentGauge, MaxGauge);
 }
 
-
-// Called every frame
-void UTrickGaugeComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
+void UTrickGaugeComponent::AddTrickGauge(float Amount)
 {
-	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+	if (Amount <= 0.f)
+	{
+		return;
+	}
 
-	// ...
+	CurrentGauge = FMath::Clamp(CurrentGauge + Amount, 0.f, MaxGauge);
+	OnTrickGaugeChanged.Broadcast(CurrentGauge, MaxGauge);
+}
+
+void UTrickGaugeComponent::SpendTrickGauge(float Amount)
+{
+	if (Amount <= 0.f)
+	{
+		return;
+	}
+
+	CurrentGauge = FMath::Clamp(CurrentGauge - Amount, 0.f, MaxGauge);
+	OnTrickGaugeChanged.Broadcast(CurrentGauge, MaxGauge);
 }
 

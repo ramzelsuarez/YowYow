@@ -77,11 +77,9 @@ bool UEnemyAIComponent::CanAttack() const
 
 void UEnemyAIComponent::ReleaseAttackToken()
 {
+	if (WaveManager && OwnerCharacter)
 	{
-		if (WaveManager && OwnerCharacter)
-		{
-			WaveManager->ReleaseAttackToken(OwnerCharacter);
-		}
+		WaveManager->ReleaseAttackToken(OwnerCharacter);
 	}
 }
 
@@ -129,6 +127,7 @@ void UEnemyAIComponent::UpdateAI(float DeltaTime)
 
 		return;
 	}
+
 	const FVector Direction = (PlayerLocation - EnemyLocation).GetSafeNormal();
 	const FVector MoveDelta = Direction * MoveSpeed * DeltaTime;
 
