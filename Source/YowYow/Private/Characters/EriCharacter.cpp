@@ -152,11 +152,16 @@ void AEriCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompon
 		// combat actions
 		if (AttackAction)
 		{
-			EnhancedInputComponent->BindAction(AttackAction, ETriggerEvent::Triggered, this, &AEriCharacter::TryAttack);
+			EnhancedInputComponent->BindAction(AttackAction, ETriggerEvent::Started, this, &AEriCharacter::TryAttack);
 		}
+		else
+		{
+			UE_LOG(LogTemp, Warning, TEXT("%s has no AttackAction assigned"), *GetName());
+		}
+
 		if (AreaAttackAction)
 		{
-			EnhancedInputComponent->BindAction(AreaAttackAction, ETriggerEvent::Triggered, this,
+			EnhancedInputComponent->BindAction(AreaAttackAction, ETriggerEvent::Started, this,
 			                                   &AEriCharacter::TryAreaAttack);
 		}
 
@@ -173,5 +178,9 @@ void AEriCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompon
 			EnhancedInputComponent->BindAction(TrickInputAction, ETriggerEvent::Triggered, this,
 			                                   &AEriCharacter::TryTrickInput);
 		}
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("%s is not using an EnhancedInputComponent"), *GetName());
 	}
 }

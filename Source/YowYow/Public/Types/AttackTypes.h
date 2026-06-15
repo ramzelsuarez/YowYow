@@ -54,4 +54,7 @@ struct FRangedAttackData
 	
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
 	TSubclassOf<AActor> Projectile;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	FVector SpawnOffset = FVector(50.f, 0.f, 50.f);
 };
