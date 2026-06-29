@@ -18,7 +18,7 @@ void UEnemyAIComponent::BeginPlay()
 
 	OwnerCharacter = Cast<ACharacterBase>(GetOwner());
 	PlayerPawn = UGameplayStatics::GetPlayerPawn(GetWorld(), 0);
-	
+
 	if (OwnerCharacter)
 	{
 		StateComponent = OwnerCharacter->FindComponentByClass<UCharacterStateComponent>();
@@ -30,6 +30,13 @@ void UEnemyAIComponent::BeginPlay()
 			UGameplayStatics::GetActorOfClass(GetWorld(), AWaveEnemyManager::StaticClass())
 		);
 	}
+
+	UE_LOG(LogTemp, Warning, TEXT("EnemyAI BeginPlay | Owner: %s | Player: %s | State: %s | WaveManager: %s"),
+		OwnerCharacter ? *OwnerCharacter->GetName() : TEXT("NULL"),
+		PlayerPawn ? *PlayerPawn->GetName() : TEXT("NULL"),
+		StateComponent ? *StateComponent->GetName() : TEXT("NULL"),
+		WaveManager ? *WaveManager->GetName() : TEXT("NULL")
+	);
 }
 
 void UEnemyAIComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
@@ -43,16 +50,24 @@ bool UEnemyAIComponent::CanAct() const
 {
 	if (!OwnerCharacter || !PlayerPawn || !StateComponent)
 	{
+		UE_LOG(LogTemp, Warning, TEXT("CanAct failed | Owner: %s | Player: %s | State: %s"),
+			OwnerCharacter ? *OwnerCharacter->GetName() : TEXT("NULL"),
+			PlayerPawn ? *PlayerPawn->GetName() : TEXT("NULL"),
+			StateComponent ? *StateComponent->GetName() : TEXT("NULL")
+		);
+
 		return false;
 	}
 
 	if (StateComponent->GetLifeState() == ECharacterLifeState::Dead)
 	{
+		UE_LOG(LogTemp, Warning, TEXT("CanAct failed | Enemy is dead"));
 		return false;
 	}
 
 	if (StateComponent->GetActionState() == ECharacterActionState::Attacking)
 	{
+		UE_LOG(LogTemp, Warning, TEXT("CanAct failed | Enemy is attacking"));
 		return false;
 	}
 
@@ -74,12 +89,15 @@ void UEnemyAIComponent::ReleaseAttackToken()
 {
 	if (WaveManager && OwnerCharacter)
 	{
+		UE_LOG(LogTemp, Warning, TEXT("%s released attack token"), *OwnerCharacter->GetName());
 		WaveManager->ReleaseAttackToken(OwnerCharacter);
 	}
 }
 
 void UEnemyAIComponent::UpdateAI(float DeltaTime)
 {
+	UE_LOG(LogTemp, Warning, TEXT("Enemy AI Tick"));
+
 	if (!CanAct())
 	{
 		return;
@@ -92,6 +110,8 @@ void UEnemyAIComponent::UpdateAI(float DeltaTime)
 
 	const float DistanceToPlayer = FVector::Dist(EnemyLocation, PlayerLocation);
 
+	UE_LOG(LogTemp, Warning, TEXT("Distance to player: %f"), DistanceToPlayer);
+
 	if (DistanceToPlayer > DetectionRange)
 	{
 		return;
@@ -103,6 +123,8 @@ void UEnemyAIComponent::UpdateAI(float DeltaTime)
 		{
 			if (!WaveManager || WaveManager->RequestAttackToken(OwnerCharacter))
 			{
+				UE_LOG(LogTemp, Warning, TEXT("%s got attack token"), *OwnerCharacter->GetName());
+
 				LastAttackTime = GetWorld()->GetTimeSeconds();
 				OwnerCharacter->DoAttack(EAttackType::Normal);
 
@@ -122,6 +144,8 @@ void UEnemyAIComponent::UpdateAI(float DeltaTime)
 
 	const FVector Direction = (PlayerLocation - EnemyLocation).GetSafeNormal();
 	const FVector MoveDelta = Direction * MoveSpeed * DeltaTime;
+
+	UE_LOG(LogTemp, Warning, TEXT("%s moving toward player"), *OwnerCharacter->GetName());
 
 	OwnerCharacter->AddActorWorldOffset(MoveDelta, true);
 }
