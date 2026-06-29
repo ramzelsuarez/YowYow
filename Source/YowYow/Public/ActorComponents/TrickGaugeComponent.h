@@ -6,25 +6,38 @@
 #include "Components/ActorComponent.h"
 #include "TrickGaugeComponent.generated.h"
 
-/**
- * This component should provide bindings for trick gauge (value) and for its depletion and replenishment
- */
-UCLASS( ClassGroup=(Custom), meta=(BlueprintSpawnableComponent) )
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnTrickGaugeChanged, float, CurrentGauge, float, MaxGauge);
+
+UCLASS(ClassGroup = (Custom), meta = (BlueprintSpawnableComponent))
 class YOWYOW_API UTrickGaugeComponent : public UActorComponent
 {
 	GENERATED_BODY()
 
-public:	
-	// Sets default values for this component's properties
+public:
 	UTrickGaugeComponent();
 
 protected:
-	// Called when the game starts
 	virtual void BeginPlay() override;
 
-public:	
-	// Called every frame
-	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Trick Gauge")
+	float MaxGauge = 100.f;
 
-		
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Trick Gauge")
+	float CurrentGauge = 0.f;
+
+public:
+	UPROPERTY(BlueprintAssignable, Category = "Trick Gauge")
+	FOnTrickGaugeChanged OnTrickGaugeChanged;
+
+	UFUNCTION(BlueprintCallable, Category = "Trick Gauge")
+	void AddTrickGauge(float Amount);
+
+	UFUNCTION(BlueprintCallable, Category = "Trick Gauge")
+	void SpendTrickGauge(float Amount);
+
+	UFUNCTION(BlueprintPure, Category = "Trick Gauge")
+	float GetCurrentGauge() const { return CurrentGauge; }
+
+	UFUNCTION(BlueprintPure, Category = "Trick Gauge")
+	float GetMaxGauge() const { return MaxGauge; }
 };

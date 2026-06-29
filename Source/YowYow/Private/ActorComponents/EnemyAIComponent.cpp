@@ -119,6 +119,7 @@ void UEnemyAIComponent::UpdateAI(float DeltaTime)
 
 		return;
 	}
+
 	const FVector Direction = (PlayerLocation - EnemyLocation).GetSafeNormal();
 	const FVector MoveDelta = Direction * MoveSpeed * DeltaTime;
 
