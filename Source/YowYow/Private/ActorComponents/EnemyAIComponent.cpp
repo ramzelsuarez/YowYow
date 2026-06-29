@@ -66,22 +66,15 @@ bool UEnemyAIComponent::CanAttack() const
 		return false;
 	}
 
-	if (StateComponent->GetLocomotionState() == ECharacterLocomotionState::Airborne)
-	{
-		return false;
-	}
-
 	const float CurrentTime = GetWorld()->GetTimeSeconds();
 	return CurrentTime - LastAttackTime >= AttackCooldown;
 }
 
 void UEnemyAIComponent::ReleaseAttackToken()
 {
+	if (WaveManager && OwnerCharacter)
 	{
-		if (WaveManager && OwnerCharacter)
-		{
-			WaveManager->ReleaseAttackToken(OwnerCharacter);
-		}
+		WaveManager->ReleaseAttackToken(OwnerCharacter);
 	}
 }
 
@@ -95,10 +88,7 @@ void UEnemyAIComponent::UpdateAI(float DeltaTime)
 	FVector EnemyLocation = OwnerCharacter->GetActorLocation();
 	FVector PlayerLocation = PlayerPawn->GetActorLocation();
 
-	if (bIgnoreZ)
-	{
-		PlayerLocation.Z = EnemyLocation.Z;
-	}
+	PlayerLocation.Z = EnemyLocation.Z;
 
 	const float DistanceToPlayer = FVector::Dist(EnemyLocation, PlayerLocation);
 

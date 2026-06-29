@@ -35,9 +35,6 @@ private:
 	UPROPERTY(EditAnywhere, Category = "Enemy AI")
 	float AttackCooldown = 1.5f;
 
-	UPROPERTY(EditAnywhere, Category = "Enemy AI")
-	bool bIgnoreZ = true;
-
 	UPROPERTY()
 	ACharacterBase* OwnerCharacter = nullptr;
 
