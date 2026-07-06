@@ -4,6 +4,7 @@
 #include "DrawDebugHelpers.h"
 #endif
 
+#include "Components/SceneComponent.h"
 #include "Engine/World.h"
 
 namespace AttackHitboxDefaults
@@ -17,12 +18,23 @@ AAttackHitbox::AAttackHitbox()
 {
 	PrimaryActorTick.bCanEverTick = true;
 	PrimaryActorTick.bStartWithTickEnabled = false;
+
+	SceneRoot = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
+	SetRootComponent(SceneRoot);
+
 	SetActorEnableCollision(false);
 }
 
-void AAttackHitbox::Initialize(AActor* InSourceActor, const FAttackData& InAttackData, float InHitboxRadius)
+void AAttackHitbox::Initialize(
+	AActor* InSourceActor,
+	const FAttackData& InAttackData,
+	float InHitboxRadius,
+	USceneComponent* InAttachedSource
+)
 {
 	SourceActor = InSourceActor;
+	AttachedSource = InAttachedSource;
+	bUseAttachedSource = AttachedSource.IsValid();
 	AttackData = InAttackData;
 	HitboxRadius = FMath::Max(InHitboxRadius, 1.f);
 
@@ -34,10 +46,15 @@ void AAttackHitbox::Initialize(AActor* InSourceActor, const FAttackData& InAttac
 
 	AttackForward = SourceActor->GetActorForwardVector().GetSafeNormal2D();
 	AttackRight = SourceActor->GetActorRightVector().GetSafeNormal2D();
-	ArcCenter = SourceActor->GetActorLocation() + FVector::UpVector * AttackHitboxDefaults::TraceHeight;
+	ArcCenter = GetSourceLocation() + FVector::UpVector * AttackHitboxDefaults::TraceHeight;
 
 	const float Range = FMath::Max(AttackData.Range, AttackHitboxDefaults::MinimumRange);
-	const FVector InitialLocation = ArcCenter + AttackRight * Range;
+	const float Speed = AttackData.Speed > 0.f ? AttackData.Speed : AttackHitboxDefaults::DefaultSpeed;
+	Duration = Range / Speed;
+
+	const FVector InitialLocation = bUseAttachedSource
+		? AttachedSource->GetComponentLocation()
+		: ArcCenter + AttackRight * Range;
 
 	SetActorLocation(InitialLocation);
 
@@ -58,11 +75,28 @@ void AAttackHitbox::Tick(float DeltaTime)
 		return;
 	}
 
-	if (AttackData.Shape == EAttackShape::Round)
+	if (bUseAttachedSource)
+	{
+		if (!AttachedSource.IsValid())
+		{
+			FinishAttack();
+			return;
+		}
+
+		TickAttached(DeltaTime);
+	}
+	else
 	{
 		TickRound(DeltaTime);
 	}
-	else
+}
+
+void AAttackHitbox::TickAttached(float DeltaTime)
+{
+	ElapsedTime += DeltaTime;
+	MoveAndTrace(AttachedSource->GetComponentLocation(), true);
+
+	if (ElapsedTime >= Duration)
 	{
 		FinishAttack();
 	}
@@ -74,7 +108,9 @@ void AAttackHitbox::TickRound(float DeltaTime)
 	const float Speed = AttackData.Speed > 0.f ? AttackData.Speed : AttackHitboxDefaults::DefaultSpeed;
 	const float AngularSpeed = FMath::RadiansToDegrees(Speed / Range);
 
-	ArcCenter = SourceActor->GetActorLocation() + FVector::UpVector * AttackHitboxDefaults::TraceHeight;
+	AttackForward = SourceActor->GetActorForwardVector().GetSafeNormal2D();
+	AttackRight = SourceActor->GetActorRightVector().GetSafeNormal2D();
+	ArcCenter = GetSourceLocation() + FVector::UpVector * AttackHitboxDefaults::TraceHeight;
 	CurrentArcAngle = FMath::Max(CurrentArcAngle - AngularSpeed * DeltaTime, -90.f);
 	const float AngleRadians = FMath::DegreesToRadians(CurrentArcAngle);
 	const FVector ArcDirection = AttackForward * FMath::Cos(AngleRadians) + AttackRight * FMath::Sin(AngleRadians);
@@ -85,6 +121,16 @@ void AAttackHitbox::TickRound(float DeltaTime)
 	{
 		FinishAttack();
 	}
+}
+
+FVector AAttackHitbox::GetSourceLocation() const
+{
+	if (const USceneComponent* SourceRoot = SourceActor.IsValid() ? SourceActor->GetRootComponent() : nullptr)
+	{
+		return SourceRoot->GetComponentLocation();
+	}
+
+	return SourceActor.IsValid() ? SourceActor->GetActorLocation() : FVector::ZeroVector;
 }
 
 void AAttackHitbox::MoveAndTrace(const FVector& NewLocation, bool bShouldTrace)

@@ -65,6 +65,8 @@ protected:
 
 	virtual void Jump() override;
 	virtual void StopJumping() override;
+	
+	bool CanMove();
 
 	UPROPERTY()
 	ASpinningRiotCameraManager* CameraManager = nullptr;

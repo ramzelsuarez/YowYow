@@ -15,8 +15,6 @@ ACharacterBase::ACharacterBase()
 {
 	PrimaryActorTick.bCanEverTick = true;
 
-	AttackComponent = CreateDefaultSubobject<UAttackComponent>(TEXT("AttackComponent"));
-
 	GetCharacterMovement()->bOrientRotationToMovement = true;
 	GetCharacterMovement()->bUseControllerDesiredRotation = false;
 	GetCharacterMovement()->RotationRate = FRotator(0.f, 400.f, 0.f);
@@ -30,6 +28,13 @@ void ACharacterBase::Tick(float DeltaTime)
 void ACharacterBase::BeginPlay()
 {
 	Super::BeginPlay();
+
+	AttackComponent = FindComponentByClass<UAttackComponent>();
+	if (!AttackComponent)
+	{
+		AttackComponent = NewObject<UAttackComponent>(this, TEXT("AttackComponent"));
+		AttackComponent->RegisterComponent();
+	}
 
 	HealthComponent = FindComponentByClass<UHealthComponent>();
 	CharacterStateComponent = FindComponentByClass<UCharacterStateComponent>();
@@ -75,6 +80,8 @@ float ACharacterBase::TakeDamage(
 
 void ACharacterBase::DoMove(float Right, float Forward)
 {
+	if (!CanMove()) return;
+
 	if (GetController() != nullptr)
 	{
 		const FRotator ControlRotation = GetControlRotation();
@@ -126,6 +133,11 @@ void ACharacterBase::Jump()
 void ACharacterBase::StopJumping()
 {
 	Super::StopJumping();
+}
+
+bool ACharacterBase::CanMove()
+{
+	return !CharacterStateComponent || CharacterStateComponent->GetAttackState() == ECharacterAttackState::None;
 }
 
 void ACharacterBase::HandleCameraRotationChanged(const FRotator& CameraRotation)

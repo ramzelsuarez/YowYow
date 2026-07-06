@@ -10,35 +10,25 @@ enum class EAttackType : uint8 {
 	Ranged UMETA(DisplayName = "Ranged"),
 };
 
-UENUM(BlueprintType)
-enum class EAttackShape : uint8
-{
-	Straight UMETA(DisplayName = "Straight"),
-	Round UMETA(DisplayName = "Round"),
-};
-
 USTRUCT(BlueprintType)
 struct FAttackDataBase
 {
 	GENERATED_BODY()
-	
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
-	float Range;
-	
+	float Range = 100.f;
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
-	float Knockback;
+	float Knockback = 0.f;
 };
 
 USTRUCT(BlueprintType)
 struct FAttackData : public FAttackDataBase
 {
 	GENERATED_BODY()
-	
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
-	EAttackShape Shape;
-	
-	UPROPERTY(EditAnywhere, BlueprintReadOnly)
-	float Speed;
+	float Speed = 600.f;
 };
 
 USTRUCT(BlueprintType)
@@ -54,7 +44,4 @@ struct FRangedAttackData
 	
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
 	TSubclassOf<AActor> Projectile;
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly)
-	FVector SpawnOffset = FVector(50.f, 0.f, 50.f);
 };

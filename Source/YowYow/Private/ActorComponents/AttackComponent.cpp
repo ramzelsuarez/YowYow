@@ -6,9 +6,10 @@
 #include "ActorComponents/CharacterStateComponent.h"
 #include "Attacks/AttackHitbox.h"
 #include "Characters/CharacterBase.h"
+#include "Characters/EriCharacter.h"
 #include "DataAssets/CharacterAttackData.h"
 #include "Engine/World.h"
-#include "Interfaces/AttackExecutor.h"
+#include "TimerManager.h"
 
 UAttackComponent::UAttackComponent()
 {
@@ -17,7 +18,7 @@ UAttackComponent::UAttackComponent()
 
 bool UAttackComponent::TryAttack(EAttackType AttackType)
 {
-	if (IsValid(ActiveHitbox) || IsValid(ActiveAttackExecutor) || !GetWorld())
+	if (IsValid(ActiveHitbox) || !GetWorld())
 	{
 		return false;
 	}
@@ -35,7 +36,7 @@ bool UAttackComponent::TryAttack(EAttackType AttackType)
 	}
 
 	const FAttackData* SelectedAttack = GetAttackData(AttackType);
-	if (!SelectedAttack || !ExecuteMeleeAttack(*SelectedAttack))
+	if (!SelectedAttack || !ExecuteMeleeAttack(*SelectedAttack, AttackType))
 	{
 		return false;
 	}
@@ -43,43 +44,30 @@ bool UAttackComponent::TryAttack(EAttackType AttackType)
 	if (AttackType == EAttackType::Normal)
 	{
 		++NormalAttackIndex;
+		bActiveAttackIsNormal = true;
+	}
+	else
+	{
+		ResetNormalCombo();
 	}
 
 	return true;
 }
 
-void UAttackComponent::RegisterAttackExecutor(UActorComponent* Executor)
+void UAttackComponent::SetAttachedHitboxSource(USceneComponent* HitboxSource)
 {
-	if (Executor && Executor->GetOwner() == GetOwner() && Executor->Implements<UAttackExecutor>())
-	{
-		RegisteredAttackExecutor = Executor;
-	}
-}
-
-void UAttackComponent::FinishExternalAttack(UActorComponent* Executor)
-{
-	if (Executor == ActiveAttackExecutor)
-	{
-		ActiveAttackExecutor = nullptr;
-		FinishAttack();
-	}
+	AttachedHitboxSource = HitboxSource;
 }
 
 void UAttackComponent::BeginPlay()
 {
 	Super::BeginPlay();
+}
 
-	TArray<UActorComponent*> OwnerComponents;
-	GetOwner()->GetComponents(OwnerComponents);
-
-	for (UActorComponent* Component : OwnerComponents)
-	{
-		if (Component && Component != this && Component->Implements<UAttackExecutor>())
-		{
-			RegisteredAttackExecutor = Component;
-			break;
-		}
-	}
+void UAttackComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	ResetNormalCombo();
+	Super::EndPlay(EndPlayReason);
 }
 
 const FAttackData* UAttackComponent::GetAttackData(EAttackType AttackType)
@@ -109,42 +97,24 @@ const FAttackData* UAttackComponent::GetAttackData(EAttackType AttackType)
 	}
 }
 
-bool UAttackComponent::ExecuteMeleeAttack(const FAttackData& AttackData)
+bool UAttackComponent::ExecuteMeleeAttack(const FAttackData& AttackData, EAttackType AttackType)
 {
-	if (ExecuteExternalAttack(AttackData))
+	USceneComponent* HitboxSource = AttachedHitboxSource;
+
+	if (AttackType == EAttackType::Normal && Cast<AEriCharacter>(GetOwner()))
 	{
-		return true;
+		AEriCharacter* EriCharacter = Cast<AEriCharacter>(GetOwner());
+		if (EriCharacter && EriCharacter->GetYoYoHitboxSource())
+		{
+			if (!EriCharacter->BeginYoYoAttack(AttackData))
+			{
+				return false;
+			}
+
+			HitboxSource = EriCharacter->GetYoYoHitboxSource();
+		}
 	}
 
-	if (AttackData.Shape == EAttackShape::Round)
-	{
-		return ExecuteRoundAttack(AttackData);
-	}
-
-	UE_LOG(
-		LogTemp,
-		Warning,
-		TEXT("%s requires an AttackExecutor component for Straight attacks"),
-		*GetOwner()->GetName()
-	);
-	return false;
-}
-
-bool UAttackComponent::ExecuteExternalAttack(const FAttackData& AttackData)
-{
-	if (!RegisteredAttackExecutor
-		|| !IAttackExecutor::Execute_CanExecuteAttack(RegisteredAttackExecutor, AttackData))
-	{
-		return false;
-	}
-
-	ActiveAttackExecutor = RegisteredAttackExecutor;
-	IAttackExecutor::Execute_ExecuteAttack(RegisteredAttackExecutor, this, AttackData);
-	return true;
-}
-
-bool UAttackComponent::ExecuteRoundAttack(const FAttackData& AttackData)
-{
 	FActorSpawnParameters SpawnParameters;
 	SpawnParameters.Owner = GetOwner();
 	SpawnParameters.Instigator = Cast<APawn>(GetOwner());
@@ -162,7 +132,7 @@ bool UAttackComponent::ExecuteRoundAttack(const FAttackData& AttackData)
 	}
 
 	ActiveHitbox->OnFinished.AddUObject(this, &UAttackComponent::HandleHitboxFinished);
-	ActiveHitbox->Initialize(GetOwner(), AttackData, HitboxRadius);
+	ActiveHitbox->Initialize(GetOwner(), AttackData, HitboxRadius, HitboxSource);
 	return true;
 }
 
@@ -174,7 +144,8 @@ bool UAttackComponent::ExecuteRangedAttack(const FRangedAttackData& AttackData)
 	}
 
 	const FVector SpawnLocation = GetOwner()->GetActorLocation()
-		+ GetOwner()->GetActorTransform().TransformVectorNoScale(AttackData.SpawnOffset);
+		+ GetOwner()->GetActorForwardVector() * 50.f
+		+ FVector::UpVector * 50.f;
 
 	FActorSpawnParameters SpawnParameters;
 	SpawnParameters.Owner = GetOwner();
@@ -194,8 +165,45 @@ bool UAttackComponent::ExecuteRangedAttack(const FRangedAttackData& AttackData)
 	}
 
 	// Projectile lifetime and hit behavior belong to the projectile class.
+	ResetNormalCombo();
 	FinishAttack();
 	return true;
+}
+
+void UAttackComponent::ResetNormalCombo()
+{
+	NormalAttackIndex = 0;
+
+	if (GetWorld())
+	{
+		GetWorld()->GetTimerManager().ClearTimer(ComboResetTimer);
+	}
+
+	bActiveAttackIsNormal = false;
+}
+
+void UAttackComponent::RestartNormalComboTimer()
+{
+	if (!GetWorld())
+	{
+		return;
+	}
+
+	GetWorld()->GetTimerManager().ClearTimer(ComboResetTimer);
+
+	if (ComboResetTime <= 0.f)
+	{
+		ResetNormalCombo();
+		return;
+	}
+
+	GetWorld()->GetTimerManager().SetTimer(
+		ComboResetTimer,
+		this,
+		&UAttackComponent::ResetNormalCombo,
+		ComboResetTime,
+		false
+	);
 }
 
 void UAttackComponent::HandleHitboxFinished(AAttackHitbox* FinishedHitbox)
@@ -211,6 +219,12 @@ void UAttackComponent::HandleHitboxFinished(AAttackHitbox* FinishedHitbox)
 
 void UAttackComponent::FinishAttack()
 {
+	if (bActiveAttackIsNormal)
+	{
+		RestartNormalComboTimer();
+		bActiveAttackIsNormal = false;
+	}
+
 	if (UCharacterStateComponent* StateComponent = GetOwner()->FindComponentByClass<UCharacterStateComponent>())
 	{
 		StateComponent->SetAttackState(ECharacterAttackState::None);
