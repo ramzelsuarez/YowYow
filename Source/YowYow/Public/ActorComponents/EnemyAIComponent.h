@@ -6,6 +6,7 @@
 
 class ACharacterBase;
 class UCharacterStateComponent;
+class AWaveEnemyManager;
 
 UCLASS(ClassGroup = (Custom), meta = (BlueprintSpawnableComponent))
 class YOWYOW_API UEnemyAIComponent : public UActorComponent
@@ -34,8 +35,11 @@ private:
 	UPROPERTY(EditAnywhere, Category = "Enemy AI")
 	float AttackCooldown = 1.5f;
 
-	UPROPERTY(EditAnywhere, Category = "Enemy AI")
-	bool bIgnoreZ = true;
+	UPROPERTY(EditAnywhere, Category = "Enemy AI|Wave")
+	AWaveEnemyManager* WaveManager = nullptr;
+
+	UPROPERTY(EditAnywhere, Category = "Enemy AI|Wave")
+	float TokenReleaseDelay = 0.8f;
 
 	UPROPERTY()
 	ACharacterBase* OwnerCharacter = nullptr;
@@ -46,9 +50,12 @@ private:
 	UPROPERTY()
 	UCharacterStateComponent* StateComponent = nullptr;
 
+	FTimerHandle AttackTokenReleaseTimerHandle;
+
 	float LastAttackTime = -999.f;
 
 	void UpdateAI(float DeltaTime);
 	bool CanAct() const;
 	bool CanAttack() const;
+	void ReleaseAttackToken();
 };
