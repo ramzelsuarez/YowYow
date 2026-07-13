@@ -12,6 +12,7 @@ class UCameraComponent;
 class USpringArmComponent;
 class UHomingAttackComponent;
 class UTrickGaugeComponent;
+class UStaticMeshComponent;
 /**
  * This class represents the player character, Eri. We shall pressure planners to never change the name of the main character,
  * since our code is now sentenced to have this class named like this.
@@ -32,6 +33,9 @@ class YOWYOW_API AEriCharacter : public ACharacterBase
 
 public:
 	AEriCharacter();
+
+	bool BeginYoYoAttack(const FAttackData& InAttackData);
+	USceneComponent* GetYoYoHitboxSource() const;
 
 protected:
 	virtual void BeginPlay() override;
@@ -98,4 +102,22 @@ protected:
 
 	UPROPERTY(VisibleAnywhere)
 	UCameraComponent* ViewCamera;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="YoYo")
+	UStaticMeshComponent* YoYoMesh;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="YoYo")
+	FVector YoYoRestOffset = FVector(35.f, 0.f, 50.f);
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="YoYo", meta=(ClampMin="0.1"))
+	float YoYoReturnSpeedMultiplier = 1.5f;
+
+	FVector YoYoAttackTargetLocation = FVector::ZeroVector;
+	float YoYoCurrentSpeed = 600.f;
+	bool bYoYoAttackActive = false;
+	bool bYoYoReturning = false;
+
+	void UpdateYoYoAttack(float DeltaTime);
+	FVector GetYoYoRestWorldLocation() const;
+	void FinishYoYoAttack();
 };

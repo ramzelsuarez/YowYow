@@ -6,7 +6,6 @@
 #include "PaperZDCharacter.h"
 #include "Interfaces/Damageable.h"
 #include "Types/AttackTypes.h"
-#include "GameFramework/CharacterMovementComponent.h"
 #include "CharacterBase.generated.h"
 
 class UCharacterStateComponent;
@@ -14,6 +13,7 @@ class ASpinningRiotCameraManager;
 class USpriteDirectionComponent;
 class UHealthComponent;
 class UAttackComponent;
+class UCharacterAttackData;
 
 /**
  * this class is the base for all characters in the game, it should implement the following components: (besides obvious movement component etc)
@@ -53,7 +53,11 @@ public:
 	 * Attack actions
 	 */
 	// default attack is normal since it's the most common usage and the only one enemies will use (probably)
+	UFUNCTION(BlueprintCallable, Category="Combat")
 	void DoAttack(EAttackType AttackType = EAttackType::Normal);
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Combat")
+	UCharacterAttackData* AttackData;
 
 protected:
 	virtual void BeginPlay() override;
@@ -61,6 +65,8 @@ protected:
 
 	virtual void Jump() override;
 	virtual void StopJumping() override;
+	
+	bool CanMove();
 
 	UPROPERTY()
 	ASpinningRiotCameraManager* CameraManager = nullptr;
