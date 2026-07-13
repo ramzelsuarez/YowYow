@@ -3,32 +3,64 @@
 
 #include "ActorComponents/HealthComponent.h"
 
-// Sets default values for this component's properties
 UHealthComponent::UHealthComponent()
 {
-	// Set this component to be initialized when the game starts, and to be ticked every frame.  You can turn these features
-	// off to improve performance if you don't need them.
-	PrimaryComponentTick.bCanEverTick = true;
-
-	// ...
+	// never tick on health. Manage with delegates
+	PrimaryComponentTick.bCanEverTick = false;
 }
 
-
-// Called when the game starts
 void UHealthComponent::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// ...
-	
+	CurrentHealth = MaxHealth;
+	bIsDead = CurrentHealth <= 0;
+
+	if (AActor* Owner = GetOwner())
+	{
+		Owner->OnTakeAnyDamage.AddDynamic(this, &UHealthComponent::HandleOwnerTakeAnyDamage);
+	}
 }
 
-
-// Called every frame
-void UHealthComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
+void UHealthComponent::Heal(int8 Amount)
 {
-	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+	if (Amount <= 0 || bIsDead) return;
 
-	// ...
+	const int8 PreviousHealth = CurrentHealth;
+
+	CurrentHealth = CurrentHealth + Amount;
+
+	const int8 DeltaHealth = CurrentHealth - PreviousHealth;
+
+	if (DeltaHealth > 0)
+	{
+		OnHealthChanged.Broadcast(this, CurrentHealth, MaxHealth, DeltaHealth);
+	}
 }
 
+void UHealthComponent::HandleOwnerTakeAnyDamage(
+	AActor* DamagedActor,
+	float Damage,
+	const UDamageType* DamageType,
+	AController* InstigatedBy,
+	AActor* DamageCauser
+)
+{
+	if (!DamagedActor || bIsDead || Damage < 0) return;
+	
+	const float PreviousHealth = CurrentHealth;
+	
+	CurrentHealth = CurrentHealth - Damage;
+	
+	const float DeltaHealth = CurrentHealth - PreviousHealth;
+	
+	if (DeltaHealth < 0) return;
+	
+	OnHealthChanged.Broadcast(this, CurrentHealth, MaxHealth, -DeltaHealth);
+	
+	if (CurrentHealth < 0)
+	{
+		bIsDead = true;
+		OnHealthDepleted.Broadcast(this, DamageCauser);
+	}
+}
