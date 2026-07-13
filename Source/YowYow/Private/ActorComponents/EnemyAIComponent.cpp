@@ -65,9 +65,8 @@ bool UEnemyAIComponent::CanAct() const
 		return false;
 	}
 
-	if (StateComponent->GetActionState() == ECharacterActionState::Attacking)
+	if (StateComponent->GetAttackState() != ECharacterAttackState::None)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("CanAct failed | Enemy is attacking"));
 		return false;
 	}
 
