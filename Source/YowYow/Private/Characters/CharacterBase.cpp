@@ -14,7 +14,7 @@
 ACharacterBase::ACharacterBase()
 {
 	PrimaryActorTick.bCanEverTick = true;
-	
+
 	GetCharacterMovement()->bOrientRotationToMovement = true;
 	GetCharacterMovement()->bUseControllerDesiredRotation = false;
 	GetCharacterMovement()->RotationRate = FRotator(0.f, 400.f, 0.f);
@@ -30,6 +30,12 @@ void ACharacterBase::BeginPlay()
 	Super::BeginPlay();
 
 	AttackComponent = FindComponentByClass<UAttackComponent>();
+	if (!AttackComponent)
+	{
+		AttackComponent = NewObject<UAttackComponent>(this, TEXT("AttackComponent"));
+		AttackComponent->RegisterComponent();
+	}
+
 	HealthComponent = FindComponentByClass<UHealthComponent>();
 	CharacterStateComponent = FindComponentByClass<UCharacterStateComponent>();
 	SpriteDirectionComponent = FindComponentByClass<USpriteDirectionComponent>();
@@ -74,6 +80,8 @@ float ACharacterBase::TakeDamage(
 
 void ACharacterBase::DoMove(float Right, float Forward)
 {
+	if (!CanMove()) return;
+
 	if (GetController() != nullptr)
 	{
 		const FRotator ControlRotation = GetControlRotation();
@@ -98,12 +106,19 @@ void ACharacterBase::DoMove(float Right, float Forward)
 
 void ACharacterBase::DoAttack(EAttackType AttackType)
 {
-	if (AttackComponent && CharacterStateComponent)
+	if (!AttackComponent)
+	{
+		return;
+	}
+
+	if (CharacterStateComponent)
 	{
 		CharacterStateComponent->SetAttackState(ECharacterAttackState::Attacking);
+	}
 
-		// TODO: either play animation or set a variable for attack so ABP can read it
-		// TODO: call AttackComponent->TryAttack(AttackType) or something like that
+	if (!AttackComponent->TryAttack(AttackType) && CharacterStateComponent)
+	{
+		CharacterStateComponent->SetAttackState(ECharacterAttackState::None);
 	}
 }
 
@@ -120,17 +135,22 @@ void ACharacterBase::StopJumping()
 	Super::StopJumping();
 }
 
-void ACharacterBase::HandleCameraRotationChanged(const FRotator &CameraRotation)
+bool ACharacterBase::CanMove()
+{
+	return !CharacterStateComponent || CharacterStateComponent->GetAttackState() == ECharacterAttackState::None;
+}
+
+void ACharacterBase::HandleCameraRotationChanged(const FRotator& CameraRotation)
 {
 	if (UPaperFlipbookComponent* PaperFlipbookComponent = GetSprite())
 	{
 		// add +90 degrees because the sprite faces "right" by default
 		PaperFlipbookComponent->SetWorldRotation(FRotator(0.f, CameraRotation.Yaw + 90.f, 0.f));
 	}
-	
 }
 
-void ACharacterBase::HandleMovementModeChanged(ACharacter* Character, EMovementMode PrevMovementMode, uint8 PreviousCustomMode)
+void ACharacterBase::HandleMovementModeChanged(ACharacter* Character, EMovementMode PrevMovementMode,
+                                               uint8 PreviousCustomMode)
 {
 	if (!CharacterStateComponent || Character != this)
 	{

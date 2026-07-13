@@ -8,6 +8,7 @@
 #include "EnhancedInputComponent.h"
 #include "ActorComponents/CharacterStateComponent.h"
 #include "ActorComponents/HomingAttackComponent.h"
+#include "Components/StaticMeshComponent.h"
 
 AEriCharacter::AEriCharacter()
 {
@@ -24,6 +25,10 @@ AEriCharacter::AEriCharacter()
 
 	ViewCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("ViewCamera"));
 	ViewCamera->SetupAttachment(CameraBoom);
+
+	YoYoMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("YoYoMesh"));
+	YoYoMesh->SetupAttachment(GetRootComponent());
+	YoYoMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 }
 
 void AEriCharacter::BeginPlay()
@@ -31,6 +36,11 @@ void AEriCharacter::BeginPlay()
 	Super::BeginPlay();
 
 	HomingAttackComponent = FindComponentByClass<UHomingAttackComponent>();
+
+	if (YoYoMesh)
+	{
+		YoYoMesh->SetRelativeLocation(YoYoRestOffset);
+	}
 
 	if (HomingAttackComponent)
 	{
@@ -41,6 +51,30 @@ void AEriCharacter::BeginPlay()
 void AEriCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+	UpdateYoYoAttack(DeltaTime);
+}
+
+bool AEriCharacter::BeginYoYoAttack(const FAttackData& InAttackData)
+{
+	if (bYoYoAttackActive || !YoYoMesh)
+	{
+		return false;
+	}
+
+	const float Range = FMath::Max(InAttackData.Range, 1.f);
+	YoYoCurrentSpeed = InAttackData.Speed > 0.f ? InAttackData.Speed : 600.f;
+	bYoYoAttackActive = true;
+	bYoYoReturning = false;
+
+	YoYoMesh->SetWorldLocation(GetYoYoRestWorldLocation());
+	YoYoAttackTargetLocation = YoYoMesh->GetComponentLocation() + GetActorForwardVector() * Range;
+
+	return true;
+}
+
+USceneComponent* AEriCharacter::GetYoYoHitboxSource() const
+{
+	return YoYoMesh;
 }
 
 void AEriCharacter::Move(const FInputActionValue& Value)
@@ -124,6 +158,50 @@ void AEriCharacter::HandleHomingAttackFinished(const bool bSuccess)
 	CharacterStateComponent->SetActionState(ECharacterActionState::Default);
 }
 
+void AEriCharacter::UpdateYoYoAttack(float DeltaTime)
+{
+	if (!bYoYoAttackActive || !YoYoMesh)
+	{
+		return;
+	}
+
+	const FVector TargetLocation = bYoYoReturning ? GetYoYoRestWorldLocation() : YoYoAttackTargetLocation;
+	const float MoveSpeed = bYoYoReturning ? YoYoCurrentSpeed * YoYoReturnSpeedMultiplier : YoYoCurrentSpeed;
+	const FVector NewLocation = FMath::VInterpConstantTo(YoYoMesh->GetComponentLocation(), TargetLocation, DeltaTime, MoveSpeed);
+
+	YoYoMesh->SetWorldLocation(NewLocation);
+
+	if (!NewLocation.Equals(TargetLocation, 1.f))
+	{
+		return;
+	}
+
+	if (!bYoYoReturning)
+	{
+		bYoYoReturning = true;
+	}
+	else
+	{
+		FinishYoYoAttack();
+	}
+}
+
+FVector AEriCharacter::GetYoYoRestWorldLocation() const
+{
+	return GetActorTransform().TransformPosition(YoYoRestOffset);
+}
+
+void AEriCharacter::FinishYoYoAttack()
+{
+	bYoYoAttackActive = false;
+	bYoYoReturning = false;
+
+	if (YoYoMesh)
+	{
+		YoYoMesh->SetRelativeLocation(YoYoRestOffset);
+	}
+}
+
 void AEriCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
 	Super::SetupPlayerInputComponent(PlayerInputComponent);
@@ -152,11 +230,16 @@ void AEriCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompon
 		// combat actions
 		if (AttackAction)
 		{
-			EnhancedInputComponent->BindAction(AttackAction, ETriggerEvent::Triggered, this, &AEriCharacter::TryAttack);
+			EnhancedInputComponent->BindAction(AttackAction, ETriggerEvent::Started, this, &AEriCharacter::TryAttack);
 		}
+		else
+		{
+			UE_LOG(LogTemp, Warning, TEXT("%s has no AttackAction assigned"), *GetName());
+		}
+
 		if (AreaAttackAction)
 		{
-			EnhancedInputComponent->BindAction(AreaAttackAction, ETriggerEvent::Triggered, this,
+			EnhancedInputComponent->BindAction(AreaAttackAction, ETriggerEvent::Started, this,
 			                                   &AEriCharacter::TryAreaAttack);
 		}
 
@@ -173,5 +256,9 @@ void AEriCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompon
 			EnhancedInputComponent->BindAction(TrickInputAction, ETriggerEvent::Triggered, this,
 			                                   &AEriCharacter::TryTrickInput);
 		}
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("%s is not using an EnhancedInputComponent"), *GetName());
 	}
 }
