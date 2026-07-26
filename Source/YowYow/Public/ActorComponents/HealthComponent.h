@@ -10,23 +10,26 @@ class AController;
 class AActor;
 class UHealthComponent;
 
+/** Consumed by HUD (future) and debug; fires on heal and damage. */
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_FourParams(
 	FOnHealthChanged,
 	UHealthComponent*, HealthComponent,
-	int8, CurrentHealth,
-	int8, MaxHealth,
+	int32, CurrentHealth,
+	int32, MaxHealth,
 	float, DeltaHealth
 );
 
+/** Consumed by ACharacterBase / AEriCharacter (camera shake on player hurt). */
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_FiveParams(
 	FOnHealthDamageTaken,
 	UHealthComponent*, HealthComponent,
-	int8, Damage,
-	int8, CurrentHealth,
+	int32, Damage,
+	int32, CurrentHealth,
 	AActor*, DamageCauser,
-	AController*, Instigator
+	AController*, DamageInstigator
 );
 
+/** Consumed by ACharacterBase (LifeState → Dead). */
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(
 	FOnHealthDepleted,
 	UHealthComponent*, HealthComponent,
@@ -42,7 +45,6 @@ class YOWYOW_API UHealthComponent : public UActorComponent
 	GENERATED_BODY()
 
 public:
-	// Sets default values for this component's properties
 	UHealthComponent();
 
 	UPROPERTY(BlueprintAssignable)
@@ -55,24 +57,24 @@ public:
 	FOnHealthDepleted OnHealthDepleted;
 
 	UFUNCTION(BlueprintPure)
-	int8 GetCurrentHealth() const { return CurrentHealth; }
+	int32 GetCurrentHealth() const { return CurrentHealth; }
 
 	UFUNCTION(BlueprintPure)
-	int8 GetMaxHealth() const { return MaxHealth; }
+	int32 GetMaxHealth() const { return MaxHealth; }
 
 	UFUNCTION(BlueprintPure)
 	bool IsDead() const { return bIsDead; }
 
 	UFUNCTION(BlueprintCallable)
-	void Heal(int8 Amount);
+	void Heal(int32 Amount);
 
 private:
-	// I don't think anyone will have over 127 health
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Health", meta = (AllowPrivateAccess = true))
-	int8 MaxHealth = 3;
+	// Game uses small heart counts (e.g. 3); int32 is required for Blueprint exposure.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Health", meta = (AllowPrivateAccess = true, ClampMin = "1"))
+	int32 MaxHealth = 3;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Health", meta = (AllowPrivateAccess = true))
-	int8 CurrentHealth = 3;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Health", meta = (AllowPrivateAccess = true, ClampMin = "0"))
+	int32 CurrentHealth = 3;
 
 	bool bIsDead = false;
 
@@ -86,6 +88,5 @@ private:
 	);
 
 protected:
-	// Called when the game starts
 	virtual void BeginPlay() override;
 };

@@ -1,11 +1,11 @@
 #include "Attacks/AttackHitbox.h"
 
-#if WITH_EDITOR
-#include "DrawDebugHelpers.h"
-#endif
-
+#include "Combat/CombatImpactLibrary.h"
 #include "Components/SceneComponent.h"
+#include "DrawDebugHelpers.h"
 #include "Engine/World.h"
+#include "GameFramework/Pawn.h"
+#include "Kismet/GameplayStatics.h"
 
 namespace AttackHitboxDefaults
 {
@@ -28,18 +28,25 @@ AAttackHitbox::AAttackHitbox()
 void AAttackHitbox::Initialize(
 	AActor* InSourceActor,
 	const FAttackData& InAttackData,
-	float InHitboxRadius,
 	USceneComponent* InAttachedSource
 )
 {
 	SourceActor = InSourceActor;
 	AttachedSource = InAttachedSource;
-	bUseAttachedSource = AttachedSource.IsValid();
 	AttackData = InAttackData;
-	HitboxRadius = FMath::Max(InHitboxRadius, 1.f);
+	Motion = InAttackData.Motion;
+	HitboxRadius = FMath::Max(InAttackData.HitboxRadius > 0.f ? InAttackData.HitboxRadius : 32.f, 1.f);
 
 	if (!SourceActor.IsValid())
 	{
+		FinishAttack();
+		return;
+	}
+
+	if (Motion == EAttackMotion::FollowSource && !AttachedSource.IsValid())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("AttackHitbox FollowSource requires an attached source on %s"),
+			*GetNameSafe(InSourceActor));
 		FinishAttack();
 		return;
 	}
@@ -52,16 +59,32 @@ void AAttackHitbox::Initialize(
 	const float Speed = AttackData.Speed > 0.f ? AttackData.Speed : AttackHitboxDefaults::DefaultSpeed;
 	Duration = Range / Speed;
 
-	const FVector InitialLocation = bUseAttachedSource
-		? AttachedSource->GetComponentLocation()
-		: ArcCenter + AttackRight * Range;
+	CurrentArcAngle = AttackData.ArcStartDegrees;
+	OrbitAngleDegrees = 0.f;
+	ElapsedTime = 0.f;
+
+	FVector InitialLocation = ArcCenter;
+	switch (Motion)
+	{
+	case EAttackMotion::FollowSource:
+		InitialLocation = AttachedSource->GetComponentLocation();
+		break;
+	case EAttackMotion::OrbitCircle:
+		InitialLocation = ArcCenter + AttackForward * Range;
+		break;
+	case EAttackMotion::ArcSweep:
+	default:
+		{
+			const float AngleRadians = FMath::DegreesToRadians(CurrentArcAngle);
+			const FVector ArcDirection =
+				AttackForward * FMath::Cos(AngleRadians) + AttackRight * FMath::Sin(AngleRadians);
+			InitialLocation = ArcCenter + ArcDirection * Range;
+		}
+		break;
+	}
 
 	SetActorLocation(InitialLocation);
-
-#if WITH_EDITOR
-	DrawDebugSphere(GetWorld(), InitialLocation, HitboxRadius, 16, FColor::Red, false, 0.f, 0, 1.5f);
-#endif
-
+	DrawDebugAt(InitialLocation, InitialLocation, false);
 	SetActorTickEnabled(true);
 }
 
@@ -75,26 +98,34 @@ void AAttackHitbox::Tick(float DeltaTime)
 		return;
 	}
 
-	if (bUseAttachedSource)
+	switch (Motion)
 	{
-		if (!AttachedSource.IsValid())
-		{
-			FinishAttack();
-			return;
-		}
-
-		TickAttached(DeltaTime);
-	}
-	else
-	{
-		TickRound(DeltaTime);
+	case EAttackMotion::FollowSource:
+		TickFollowSource(DeltaTime);
+		break;
+	case EAttackMotion::OrbitCircle:
+		TickOrbitCircle(DeltaTime);
+		break;
+	case EAttackMotion::ArcSweep:
+	default:
+		TickArcSweep(DeltaTime);
+		break;
 	}
 }
 
-void AAttackHitbox::TickAttached(float DeltaTime)
+void AAttackHitbox::TickFollowSource(float DeltaTime)
 {
+	if (!AttachedSource.IsValid())
+	{
+		FinishAttack();
+		return;
+	}
+
 	ElapsedTime += DeltaTime;
-	MoveAndTrace(AttachedSource->GetComponentLocation(), true);
+	const bool bShouldTrace = AttackData.FollowDamageWindow == EFollowSourceDamageWindow::FullPath
+		|| ElapsedTime <= Duration;
+
+	MoveAndTrace(AttachedSource->GetComponentLocation(), bShouldTrace);
 
 	if (ElapsedTime >= Duration)
 	{
@@ -102,7 +133,7 @@ void AAttackHitbox::TickAttached(float DeltaTime)
 	}
 }
 
-void AAttackHitbox::TickRound(float DeltaTime)
+void AAttackHitbox::TickArcSweep(float DeltaTime)
 {
 	const float Range = FMath::Max(AttackData.Range, AttackHitboxDefaults::MinimumRange);
 	const float Speed = AttackData.Speed > 0.f ? AttackData.Speed : AttackHitboxDefaults::DefaultSpeed;
@@ -111,13 +142,54 @@ void AAttackHitbox::TickRound(float DeltaTime)
 	AttackForward = SourceActor->GetActorForwardVector().GetSafeNormal2D();
 	AttackRight = SourceActor->GetActorRightVector().GetSafeNormal2D();
 	ArcCenter = GetSourceLocation() + FVector::UpVector * AttackHitboxDefaults::TraceHeight;
-	CurrentArcAngle = FMath::Max(CurrentArcAngle - AngularSpeed * DeltaTime, -90.f);
+
+	const float EndAngle = AttackData.ArcEndDegrees;
+	const float StartAngle = AttackData.ArcStartDegrees;
+	const bool bDecreasing = EndAngle < StartAngle;
+
+	if (bDecreasing)
+	{
+		CurrentArcAngle = FMath::Max(CurrentArcAngle - AngularSpeed * DeltaTime, EndAngle);
+	}
+	else
+	{
+		CurrentArcAngle = FMath::Min(CurrentArcAngle + AngularSpeed * DeltaTime, EndAngle);
+	}
+
 	const float AngleRadians = FMath::DegreesToRadians(CurrentArcAngle);
-	const FVector ArcDirection = AttackForward * FMath::Cos(AngleRadians) + AttackRight * FMath::Sin(AngleRadians);
+	const FVector ArcDirection =
+		AttackForward * FMath::Cos(AngleRadians) + AttackRight * FMath::Sin(AngleRadians);
 
 	MoveAndTrace(ArcCenter + ArcDirection * Range, true);
 
-	if (CurrentArcAngle <= -90.f)
+	const bool bReachedEnd = bDecreasing
+		? CurrentArcAngle <= EndAngle
+		: CurrentArcAngle >= EndAngle;
+
+	if (bReachedEnd)
+	{
+		FinishAttack();
+	}
+}
+
+void AAttackHitbox::TickOrbitCircle(float DeltaTime)
+{
+	const float Range = FMath::Max(AttackData.Range, AttackHitboxDefaults::MinimumRange);
+	const float Speed = AttackData.Speed > 0.f ? AttackData.Speed : AttackHitboxDefaults::DefaultSpeed;
+	const float AngularSpeed = FMath::RadiansToDegrees(Speed / Range);
+
+	AttackForward = SourceActor->GetActorForwardVector().GetSafeNormal2D();
+	AttackRight = SourceActor->GetActorRightVector().GetSafeNormal2D();
+	ArcCenter = GetSourceLocation() + FVector::UpVector * AttackHitboxDefaults::TraceHeight;
+
+	OrbitAngleDegrees += AngularSpeed * DeltaTime;
+	const float AngleRadians = FMath::DegreesToRadians(OrbitAngleDegrees);
+	const FVector OrbitDirection =
+		AttackForward * FMath::Cos(AngleRadians) + AttackRight * FMath::Sin(AngleRadians);
+
+	MoveAndTrace(ArcCenter + OrbitDirection * Range, true);
+
+	if (OrbitAngleDegrees >= 360.f)
 	{
 		FinishAttack();
 	}
@@ -137,12 +209,7 @@ void AAttackHitbox::MoveAndTrace(const FVector& NewLocation, bool bShouldTrace)
 {
 	const FVector PreviousLocation = GetActorLocation();
 	SetActorLocation(NewLocation);
-
-#if WITH_EDITOR
-	const FColor DebugColor = bShouldTrace ? FColor::Red : FColor::Yellow;
-	DrawDebugSphere(GetWorld(), NewLocation, HitboxRadius, 16, DebugColor, false, 0.f, 0, 1.5f);
-	DrawDebugLine(GetWorld(), PreviousLocation, NewLocation, DebugColor, false, 0.f, 0, 1.5f);
-#endif
+	DrawDebugAt(NewLocation, PreviousLocation, bShouldTrace);
 
 	if (bShouldTrace)
 	{
@@ -187,7 +254,35 @@ void AAttackHitbox::TraceHits(const FVector& Start, const FVector& End)
 
 void AAttackHitbox::HandleHit(AActor* HitActor)
 {
-	// Intentionally left as a no-op until the damage receiving contract is defined.
+	if (!IsValid(HitActor) || !SourceActor.IsValid())
+	{
+		return;
+	}
+
+	APawn* InstigatorPawn = Cast<APawn>(SourceActor.Get());
+	AController* InstigatorController = InstigatorPawn ? InstigatorPawn->GetController() : nullptr;
+
+	UGameplayStatics::ApplyDamage(
+		HitActor,
+		AttackData.Damage,
+		InstigatorController,
+		SourceActor.Get(),
+		nullptr
+	);
+
+	FVector KnockbackDir = HitActor->GetActorLocation() - SourceActor->GetActorLocation();
+	if (KnockbackDir.IsNearlyZero())
+	{
+		KnockbackDir = SourceActor->GetActorForwardVector();
+	}
+
+	UCombatImpactLibrary::ApplyKnockback(HitActor, KnockbackDir, AttackData.Knockback);
+	UCombatImpactLibrary::ApplyHitStopPair(
+		SourceActor.Get(),
+		HitActor,
+		AttackData.HitStopDuration,
+		AttackData.HitStopDilation
+	);
 }
 
 void AAttackHitbox::FinishAttack()
@@ -201,4 +296,16 @@ void AAttackHitbox::FinishAttack()
 	SetActorTickEnabled(false);
 	OnFinished.Broadcast(this);
 	Destroy();
+}
+
+void AAttackHitbox::DrawDebugAt(const FVector& Location, const FVector& PreviousLocation, bool bShouldTrace) const
+{
+	if (!bDrawDebug || !GetWorld())
+	{
+		return;
+	}
+
+	const FColor DebugColor = bShouldTrace ? FColor::Red : FColor::Yellow;
+	DrawDebugSphere(GetWorld(), Location, HitboxRadius, 16, DebugColor, false, 0.f, 0, 1.5f);
+	DrawDebugLine(GetWorld(), PreviousLocation, Location, DebugColor, false, 0.f, 0, 1.5f);
 }

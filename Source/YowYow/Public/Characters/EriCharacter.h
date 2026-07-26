@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Characters/CharacterBase.h"
+#include "Types/AttackTypes.h"
 #include "EriCharacter.generated.h"
 
 struct FInputActionValue;
@@ -13,18 +14,14 @@ class USpringArmComponent;
 class UHomingAttackComponent;
 class UTrickGaugeComponent;
 class UStaticMeshComponent;
+class UStaticMesh;
+class USceneComponent;
+class UAttackComponent;
+
 /**
- * This class represents the player character, Eri. We shall pressure planners to never change the name of the main character,
- * since our code is now sentenced to have this class named like this.
- *
- * This class should implement the following components: (besides camera and spring arm)
- * - UTrickGaugeComponent: only manages the trick gauge and its drain/fill
- * - UYoyoTrickComponent: should handle the "trick mode" and its inputs
- * - UHomingAttackComponent: self explanatory (check documentation if not sure about what's a homing attack)
- *
- * Eri may or may not require a custom PaperZDAnimInstance component (which will later be instantiated as a BP)
- * the reason is that it's much easier to read code than blueprint spaghetti when it comes to calculating all that stuff
- * and the BP would only "read" the variables in there without any of the ugly stuff ^^
+ * Player character Eri.
+ * Yoyo components are created in C++; mesh assets assigned in BP.
+ * Rest pose = component transform from the BP/viewport (never overwritten in BeginPlay).
  */
 UCLASS()
 class YOWYOW_API AEriCharacter : public ACharacterBase
@@ -34,41 +31,40 @@ class YOWYOW_API AEriCharacter : public ACharacterBase
 public:
 	AEriCharacter();
 
-	bool BeginYoYoAttack(const FAttackData& InAttackData);
-	USceneComponent* GetYoYoHitboxSource() const;
+	/** True while a yoyo is mid thrust/orbit/return (blocks / buffers next attack). */
+	UFUNCTION(BlueprintPure, Category = "YoYo")
+	bool IsYoYoPresentationActive() const { return PresentationMode != EYoYoPresentationMode::None; }
+
+	UFUNCTION(BlueprintPure, Category = "Homing")
+	bool IsHomingCameraLocked() const { return bHomingCameraLocked; }
 
 protected:
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
 	virtual void Tick(float DeltaTime) override;
 
-	/**
-	 * Input Actions 
-	 */
-	UPROPERTY(EditAnywhere, Category="Input Actions|Movement")
+	UPROPERTY(EditAnywhere, Category = "Input Actions|Movement")
 	UInputAction* MovementAction = nullptr;
-	
-	UPROPERTY(EditAnywhere, Category="Input Actions|Movement")
+
+	UPROPERTY(EditAnywhere, Category = "Input Actions|Movement")
 	UInputAction* JumpAction = nullptr;
-	
-	UPROPERTY(EditAnywhere, Category="Input Actions|Movement")
+
+	UPROPERTY(EditAnywhere, Category = "Input Actions|Movement")
 	UInputAction* LookAction = nullptr;
 
-	UPROPERTY(EditAnywhere, Category="Input Actions|Combat")
+	UPROPERTY(EditAnywhere, Category = "Input Actions|Combat")
 	UInputAction* AttackAction = nullptr;
 
-	UPROPERTY(EditAnywhere, Category="Input Actions|Combat")
+	UPROPERTY(EditAnywhere, Category = "Input Actions|Combat")
 	UInputAction* AreaAttackAction = nullptr;
 
-	UPROPERTY(EditAnywhere, Category="Input Actions|Trick")
+	UPROPERTY(EditAnywhere, Category = "Input Actions|Trick")
 	UInputAction* TrickModeAction = nullptr;
 
-	UPROPERTY(EditAnywhere, Category="Input Actions|Trick")
+	UPROPERTY(EditAnywhere, Category = "Input Actions|Trick")
 	UInputAction* TrickInputAction = nullptr;
 
-	/**
-	 * Input callbacks
-	 */
 	void Move(const FInputActionValue& Value);
 	void JumpPressed();
 	void JumpReleased();
@@ -78,46 +74,96 @@ protected:
 	void EnterTrickMode();
 	void ExitTrickMode();
 	void TryTrickInput(const FInputActionValue& Value);
-	
-	/**
-	 * Actor Components
-	 */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
-	UTrickGaugeComponent* TrickGaugeComponent;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
-	UHomingAttackComponent* HomingAttackComponent;
+	UTrickGaugeComponent* TrickGaugeComponent = nullptr;
 
-	/**
-	 * Actor Component events
-	 */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+	UHomingAttackComponent* HomingAttackComponent = nullptr;
+
+	/** Consumed from UHomingAttackComponent::OnHomingAttackFinished. */
 	UFUNCTION()
 	void HandleHomingAttackFinished(const bool bSuccess);
 
-	/**
-	 * Camera
-	 */
-	UPROPERTY(VisibleAnywhere)
-	USpringArmComponent* CameraBoom;
+	/** Consumed from UAttackComponent::OnAttackStarted. */
+	UFUNCTION()
+	void HandleAttackStarted(EAttackType AttackType, FAttackData StartedAttackData);
+
+	/** Consumed from UAttackComponent::OnAttackFinished (hit window done → start return if needed). */
+	UFUNCTION()
+	void HandleAttackFinished(EAttackType AttackType, bool bCompleted);
 
 	UPROPERTY(VisibleAnywhere)
-	UCameraComponent* ViewCamera;
+	USpringArmComponent* CameraBoom = nullptr;
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="YoYo")
-	UStaticMeshComponent* YoYoMesh;
+	UPROPERTY(VisibleAnywhere)
+	UCameraComponent* ViewCamera = nullptr;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="YoYo")
-	FVector YoYoRestOffset = FVector(35.f, 0.f, 50.f);
+	/** Set Static Mesh + relative transform in the BP viewport (position is NOT overwritten in code). */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "YoYo")
+	UStaticMeshComponent* YoYoRight = nullptr;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="YoYo", meta=(ClampMin="0.1"))
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "YoYo")
+	UStaticMeshComponent* YoYoLeft = nullptr;
+
+	/** Optional: apply this mesh to both hands in BeginPlay if set. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "YoYo|Mesh")
+	UStaticMesh* YoYoMeshAsset = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "YoYo|Mesh")
+	UStaticMesh* YoYoLeftMeshAsset = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "YoYo", meta = (ClampMin = "0.1"))
 	float YoYoReturnSpeedMultiplier = 1.5f;
 
-	FVector YoYoAttackTargetLocation = FVector::ZeroVector;
+	/** How fast control yaw catches up to flight direction while homing (deg/s). 0 = snap. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Homing|Camera", meta = (ClampMin = "0.0"))
+	float HomingCameraYawInterpSpeed = 720.f;
+
+	/** If true, pitch look is also blocked during homing lock (yaw always blocked). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Homing|Camera")
+	bool bHomingCameraLockPitch = false;
+
+private:
+	void SetHomingCameraLocked(bool bLocked);
+	void UpdateHomingCameraLock(float DeltaTime);
+	FVector GetHomingCameraFacingDirection() const;
+	enum class EYoYoPresentationMode : uint8
+	{
+		None,
+		Thrust,
+		Orbit
+	};
+
+	struct FYoYoRuntime
+	{
+		TWeakObjectPtr<USceneComponent> Component;
+		FVector RestRelative = FVector::ZeroVector;
+		FVector OutboundWorld = FVector::ZeroVector;
+		float OrbitPhaseOffsetDegrees = 0.f;
+		bool bActive = false;
+	};
+
+	void ApplyYoYoMeshAssets();
+	void CacheYoYoRests();
+	void BeginYoYoPresentation(const FAttackData& InAttackData);
+	void UpdateYoYoPresentation(float DeltaTime);
+	void StartYoYoReturn();
+	void FinishYoYoPresentation();
+	void GatherHands(EYoYoHand Hand, TArray<FYoYoRuntime*>& OutHands);
+	FVector GetRestWorldLocation(const FYoYoRuntime& Hand) const;
+	bool AreActiveYoYosAtTarget(bool bReturning) const;
+
+	FYoYoRuntime RightHand;
+	FYoYoRuntime LeftHand;
+
+	EYoYoPresentationMode PresentationMode = EYoYoPresentationMode::None;
+	FVector CachedAttackForward = FVector::ForwardVector;
 	float YoYoCurrentSpeed = 600.f;
-	bool bYoYoAttackActive = false;
+	float OrbitRadius = 100.f;
+	float OrbitAngleDegrees = 0.f;
 	bool bYoYoReturning = false;
 
-	void UpdateYoYoAttack(float DeltaTime);
-	FVector GetYoYoRestWorldLocation() const;
-	void FinishYoYoAttack();
+	/** Camera locked behind Eri during homing dash (back sprite only). */
+	bool bHomingCameraLocked = false;
 };

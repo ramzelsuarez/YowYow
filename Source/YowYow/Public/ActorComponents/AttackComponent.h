@@ -12,18 +12,25 @@ class AAttackHitbox;
 class UCharacterAttackData;
 class USceneComponent;
 
+/** Consumed by AEriCharacter (yoyo presentation). */
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(
+	FOnAttackStarted,
+	EAttackType, AttackType,
+	FAttackData, StartedAttackData
+);
+
+/** Consumed by AEriCharacter (hit window ended — start yoyo return, do not snap home). */
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(
+	FOnAttackFinished,
+	EAttackType, AttackType,
+	bool, bCompleted
+);
+
 /**
- * This component is meant to be used by both Eri and enemies
- *
- * it should handle:
- * - Setting the character state to attacking
- * - Checking for combo chains (a Data Asset should provide info on whether there are combo attacks left or not etc)
- * - Spawning generic melee hitboxes and ranged projectiles
- * - Optional: Tell the Character class that it should play an animation.
- *			   It's optional because maybe the character will handle this in ABP (as opposed to playing an AnimMontage).
- *			   Not sure how it's done with PaperZD
+ * Shared attack orchestrator for Eri and enemies.
+ * While presentation is blocking (yoyo out/return), new inputs are buffered and fire when yoyo is home.
  */
-UCLASS( ClassGroup=(Custom), meta=(BlueprintSpawnableComponent) )
+UCLASS(ClassGroup = (Custom), meta = (BlueprintSpawnableComponent))
 class YOWYOW_API UAttackComponent : public UActorComponent
 {
 	GENERATED_BODY()
@@ -31,38 +38,92 @@ class YOWYOW_API UAttackComponent : public UActorComponent
 public:
 	UAttackComponent();
 
-	UFUNCTION(BlueprintCallable)
+	UFUNCTION(BlueprintCallable, Category = "Combat")
 	bool TryAttack(EAttackType AttackType = EAttackType::Normal);
 
-	UFUNCTION(BlueprintCallable, Category="Combat")
+	UFUNCTION(BlueprintCallable, Category = "Combat")
 	void SetAttachedHitboxSource(USceneComponent* HitboxSource);
+
+	UFUNCTION(BlueprintCallable, Category = "Combat|YoYo")
+	void SetHandSources(USceneComponent* RightSource, USceneComponent* LeftSource);
+
+	/**
+	 * Eri: wait for full yoyo go+return before accepting the next attack.
+	 * Enemies leave this false (default).
+	 */
+	UFUNCTION(BlueprintCallable, Category = "Combat|YoYo")
+	void SetRequiresPresentationComplete(bool bRequires);
+
+	/** Called by AEriCharacter when yoyos are fully home after a presentation. */
+	UFUNCTION(BlueprintCallable, Category = "Combat|YoYo")
+	void NotifyPresentationComplete();
+
+	UFUNCTION(BlueprintPure, Category = "Combat")
+	bool IsAttackActive() const;
+
+	UFUNCTION(BlueprintPure, Category = "Combat")
+	bool IsPresentationBlocking() const { return bPresentationBlocking; }
+
+	UPROPERTY(BlueprintAssignable, Category = "Combat")
+	FOnAttackStarted OnAttackStarted;
+
+	UPROPERTY(BlueprintAssignable, Category = "Combat")
+	FOnAttackFinished OnAttackFinished;
 
 protected:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 private:
-	const FAttackData* GetAttackData(EAttackType AttackType);
+	const FAttackData* GetAttackData(EAttackType AttackType) const;
+	bool CanStartAttack() const;
 	bool ExecuteMeleeAttack(const FAttackData& AttackData, EAttackType AttackType);
 	bool ExecuteRangedAttack(const FRangedAttackData& AttackData);
+	void CollectHitboxSources(const FAttackData& AttackData, TArray<USceneComponent*>& OutSources) const;
+	bool SpawnHitbox(const FAttackData& AttackData, USceneComponent* SourceOrNull);
 	void ResetNormalCombo();
 	void RestartNormalComboTimer();
-	void FinishAttack();
+	void BeginRecovery(float RecoverySeconds);
+	void FinishRecovery();
+	void FinishHitWindow(bool bCompleted);
+	void CompleteAttackCycle(bool bCompleted);
 	void HandleHitboxFinished(AAttackHitbox* FinishedHitbox);
+	void ApplyAttackFacingLock(bool bLock);
+	void SetAttackingStates(bool bAttacking);
+	void TryConsumeBufferedAttack();
 
-	UPROPERTY(EditAnywhere, Category="Attack", meta=(ClampMin="1.0"))
+	UPROPERTY(EditAnywhere, Category = "Attack", meta = (ClampMin = "1.0"))
 	float HitboxRadius = 32.f;
 
-	UPROPERTY()
-	AAttackHitbox* ActiveHitbox = nullptr;
-
-	UPROPERTY()
-	USceneComponent* AttachedHitboxSource = nullptr;
-
-	UPROPERTY(EditAnywhere, Category="Attack|Combo", meta=(ClampMin="0.0"))
+	UPROPERTY(EditAnywhere, Category = "Attack|Combo", meta = (ClampMin = "0.0"))
 	float ComboResetTime = 0.75f;
 
+	UPROPERTY()
+	TArray<TObjectPtr<AAttackHitbox>> ActiveHitboxes;
+
+	UPROPERTY()
+	TObjectPtr<USceneComponent> AttachedHitboxSource = nullptr;
+
+	UPROPERTY()
+	TObjectPtr<USceneComponent> YoYoRightSource = nullptr;
+
+	UPROPERTY()
+	TObjectPtr<USceneComponent> YoYoLeftSource = nullptr;
+
 	FTimerHandle ComboResetTimer;
+	FTimerHandle RecoveryTimer;
+
 	int32 NormalAttackIndex = 0;
+	int32 PendingHitboxes = 0;
 	bool bActiveAttackIsNormal = false;
+	bool bInRecovery = false;
+	bool bFacingLockedByAttack = false;
+	bool bCachedOrientRotationToMovement = true;
+	bool bRequiresPresentationComplete = false;
+	bool bPresentationBlocking = false;
+	bool bHasBufferedAttack = false;
+	EAttackType BufferedAttackType = EAttackType::Normal;
+
+	EAttackType ActiveAttackType = EAttackType::Normal;
+	float ActiveRecoveryTime = 0.f;
 };

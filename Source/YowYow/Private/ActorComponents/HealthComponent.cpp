@@ -5,7 +5,6 @@
 
 UHealthComponent::UHealthComponent()
 {
-	// never tick on health. Manage with delegates
 	PrimaryComponentTick.bCanEverTick = false;
 }
 
@@ -22,19 +21,20 @@ void UHealthComponent::BeginPlay()
 	}
 }
 
-void UHealthComponent::Heal(int8 Amount)
+void UHealthComponent::Heal(int32 Amount)
 {
-	if (Amount <= 0 || bIsDead) return;
+	if (Amount <= 0 || bIsDead)
+	{
+		return;
+	}
 
-	const int8 PreviousHealth = CurrentHealth;
+	const int32 PreviousHealth = CurrentHealth;
+	CurrentHealth = FMath::Min(CurrentHealth + Amount, MaxHealth);
 
-	CurrentHealth = CurrentHealth + Amount;
-
-	const int8 DeltaHealth = CurrentHealth - PreviousHealth;
-
+	const int32 DeltaHealth = CurrentHealth - PreviousHealth;
 	if (DeltaHealth > 0)
 	{
-		OnHealthChanged.Broadcast(this, CurrentHealth, MaxHealth, DeltaHealth);
+		OnHealthChanged.Broadcast(this, CurrentHealth, MaxHealth, static_cast<float>(DeltaHealth));
 	}
 }
 
@@ -46,19 +46,31 @@ void UHealthComponent::HandleOwnerTakeAnyDamage(
 	AActor* DamageCauser
 )
 {
-	if (!DamagedActor || bIsDead || Damage < 0) return;
-	
-	const float PreviousHealth = CurrentHealth;
-	
-	CurrentHealth = CurrentHealth - Damage;
-	
-	const float DeltaHealth = CurrentHealth - PreviousHealth;
-	
-	if (DeltaHealth < 0) return;
-	
-	OnHealthChanged.Broadcast(this, CurrentHealth, MaxHealth, -DeltaHealth);
-	
-	if (CurrentHealth < 0)
+	if (!DamagedActor || bIsDead || Damage <= 0.f)
+	{
+		return;
+	}
+
+	const int32 PreviousHealth = CurrentHealth;
+	const int32 DamageInt = FMath::Max(1, FMath::RoundToInt(Damage));
+	CurrentHealth = FMath::Max(0, PreviousHealth - DamageInt);
+
+	const int32 AppliedDamage = PreviousHealth - CurrentHealth;
+	if (AppliedDamage <= 0)
+	{
+		return;
+	}
+
+	OnHealthChanged.Broadcast(this, CurrentHealth, MaxHealth, static_cast<float>(-AppliedDamage));
+	OnHealthDamageTaken.Broadcast(
+		this,
+		AppliedDamage,
+		CurrentHealth,
+		DamageCauser,
+		InstigatedBy
+	);
+
+	if (CurrentHealth <= 0)
 	{
 		bIsDead = true;
 		OnHealthDepleted.Broadcast(this, DamageCauser);
