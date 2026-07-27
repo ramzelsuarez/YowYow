@@ -18,7 +18,11 @@ enum class EAttackMotion : uint8
 	ArcSweep UMETA(DisplayName = "Arc Sweep"),
 	/** Hit volume follows a scene component (yoyo). */
 	FollowSource UMETA(DisplayName = "Follow Source"),
-	/** Full circle around the attacker (area). */
+	/**
+	 * Heavy / area: dual crescents (medialunas).
+	 * Both start behind the attacker and sweep once to the front —
+	 * one through the right side, one through the left. No full spin.
+	 */
 	OrbitCircle UMETA(DisplayName = "Orbit Circle"),
 };
 
@@ -47,8 +51,9 @@ struct FAttackDataBase
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (ClampMin = "0.0"))
 	float Range = 100.f;
 
+	/** Horizontal launch strength on hit (cm/s). 0 = no knockback. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (ClampMin = "0.0"))
-	float Knockback = 0.f;
+	float Knockback = 400.f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (ClampMin = "0.0"))
 	float Damage = 1.f;

@@ -30,7 +30,7 @@ bool UAttackComponent::TryAttack(EAttackType AttackType)
 		return false;
 	}
 
-	// Cache input while yoyo is still out / returning (or mid hit window).
+	// Buffer while hit window / recovery / yoyo return is still busy.
 	if (!CanStartAttack())
 	{
 		if (IsAttackActive() && (AttackType == EAttackType::Normal || AttackType == EAttackType::Area))
@@ -114,7 +114,7 @@ void UAttackComponent::NotifyPresentationComplete()
 		bActiveAttackIsNormal = false;
 	}
 
-	// Only now: start a buffered attack (combo input pressed during go/return).
+	// Buffered input pressed during go/return fires here (next Normal index).
 	TryConsumeBufferedAttack();
 }
 
@@ -156,11 +156,6 @@ bool UAttackComponent::CanStartAttack() const
 	if (const UCharacterStateComponent* State = GetOwner()->FindComponentByClass<UCharacterStateComponent>())
 	{
 		if (State->GetLifeState() == ECharacterLifeState::Dead)
-		{
-			return false;
-		}
-
-		if (State->GetAttackState() != ECharacterAttackState::None)
 		{
 			return false;
 		}
@@ -237,7 +232,7 @@ void UAttackComponent::CollectHitboxSources(const FAttackData& AttackData, TArra
 	}
 }
 
-bool UAttackComponent::SpawnHitbox(const FAttackData& AttackData, USceneComponent* SourceOrNull)
+bool UAttackComponent::SpawnHitbox(const FAttackData& AttackData, USceneComponent* SourceOrNull, float OrbitSideSign)
 {
 	FActorSpawnParameters SpawnParameters;
 	SpawnParameters.Owner = GetOwner();
@@ -256,7 +251,7 @@ bool UAttackComponent::SpawnHitbox(const FAttackData& AttackData, USceneComponen
 	}
 
 	Hitbox->OnFinished.AddUObject(this, &UAttackComponent::HandleHitboxFinished);
-	Hitbox->Initialize(GetOwner(), AttackData, SourceOrNull);
+	Hitbox->Initialize(GetOwner(), AttackData, SourceOrNull, OrbitSideSign);
 	ActiveHitboxes.Add(Hitbox);
 	++PendingHitboxes;
 	return true;
@@ -293,7 +288,8 @@ bool UAttackComponent::ExecuteMeleeAttack(const FAttackData& AttackData, EAttack
 	PendingHitboxes = 0;
 	ActiveHitboxes.Reset();
 
-	// Block next attack until yoyo fully returns (Eri sets RequiresPresentationComplete).
+	// Block next free attack until yoyo fully returns (Eri sets RequiresPresentationComplete).
+	// Input during that time is buffered and consumed on NotifyPresentationComplete.
 	const bool bUsesPresentation =
 		bRequiresPresentationComplete
 		&& (ResolvedAttack.Motion == EAttackMotion::FollowSource
@@ -315,6 +311,18 @@ bool UAttackComponent::ExecuteMeleeAttack(const FAttackData& AttackData, EAttack
 			{
 				bSpawnedAny = true;
 			}
+		}
+	}
+	else if (ResolvedAttack.Motion == EAttackMotion::OrbitCircle)
+	{
+		// Heavy: two medialunas (right -1, left +1), each back → front once.
+		if (SpawnHitbox(ResolvedAttack, nullptr, -1.f))
+		{
+			bSpawnedAny = true;
+		}
+		if (SpawnHitbox(ResolvedAttack, nullptr, +1.f))
+		{
+			bSpawnedAny = true;
 		}
 	}
 	else
@@ -439,7 +447,7 @@ void UAttackComponent::FinishHitWindow(bool bCompleted)
 
 	if (bPresentationBlocking)
 	{
-		// Keep facing lock + attack state until NotifyPresentationComplete (yoyo home).
+		// Keep facing lock + attack state until yoyo is home.
 		if (UCharacterStateComponent* State = GetOwner()->FindComponentByClass<UCharacterStateComponent>())
 		{
 			State->SetAttackState(ECharacterAttackState::Recovery);

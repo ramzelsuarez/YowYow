@@ -20,11 +20,14 @@ public:
 
 	/**
 	 * @param InAttachedSource Required when AttackData.Motion == FollowSource.
+	 * @param InOrbitSideSign OrbitCircle only: +1 = left crescent (back→left→front),
+	 *        -1 = right crescent (back→right→front). Ignored for other motions.
 	 */
 	void Initialize(
 		AActor* InSourceActor,
 		const FAttackData& InAttackData,
-		USceneComponent* InAttachedSource = nullptr
+		USceneComponent* InAttachedSource = nullptr,
+		float InOrbitSideSign = -1.f
 	);
 
 	FAttackHitboxFinished OnFinished;
@@ -61,6 +64,10 @@ private:
 	float HitboxRadius = 32.f;
 	float CurrentArcAngle = 90.f;
 	float OrbitAngleDegrees = 0.f;
+	/** Degrees traveled on this crescent (finish at 180 — back to front once). */
+	float OrbitTravelDegrees = 0.f;
+	/** +1 left medialuna, -1 right medialuna. */
+	float OrbitSideSign = -1.f;
 	float ElapsedTime = 0.f;
 	float Duration = 0.f;
 	bool bFinished = false;

@@ -59,6 +59,10 @@ protected:
 	UPROPERTY(EditAnywhere, Category = "Input Actions|Combat")
 	UInputAction* AreaAttackAction = nullptr;
 
+	/** Air homing dash (target must be found). Separate from light attack so air combat works. */
+	UPROPERTY(EditAnywhere, Category = "Input Actions|Combat")
+	UInputAction* HomingAction = nullptr;
+
 	UPROPERTY(EditAnywhere, Category = "Input Actions|Trick")
 	UInputAction* TrickModeAction = nullptr;
 
@@ -71,6 +75,7 @@ protected:
 	void Look(const FInputActionValue& Value);
 	void TryAttack();
 	void TryAreaAttack();
+	void TryHomingAttack();
 	void EnterTrickMode();
 	void ExitTrickMode();
 	void TryTrickInput(const FInputActionValue& Value);
@@ -116,9 +121,9 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "YoYo", meta = (ClampMin = "0.1"))
 	float YoYoReturnSpeedMultiplier = 1.5f;
 
-	/** How fast control yaw catches up to flight direction while homing (deg/s). 0 = snap. */
+	/** How fast control yaw catches up to flight direction while homing (deg/s). 0 = snap. Fast but readable. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Homing|Camera", meta = (ClampMin = "0.0"))
-	float HomingCameraYawInterpSpeed = 720.f;
+	float HomingCameraYawInterpSpeed = 540.f;
 
 	/** If true, pitch look is also blocked during homing lock (yaw always blocked). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Homing|Camera")
@@ -140,7 +145,8 @@ private:
 		TWeakObjectPtr<USceneComponent> Component;
 		FVector RestRelative = FVector::ZeroVector;
 		FVector OutboundWorld = FVector::ZeroVector;
-		float OrbitPhaseOffsetDegrees = 0.f;
+		/** +1 left crescent, -1 right crescent (Orbit presentation). */
+		float OrbitSideSign = -1.f;
 		bool bActive = false;
 	};
 
@@ -161,7 +167,8 @@ private:
 	FVector CachedAttackForward = FVector::ForwardVector;
 	float YoYoCurrentSpeed = 600.f;
 	float OrbitRadius = 100.f;
-	float OrbitAngleDegrees = 0.f;
+	/** Degrees traveled this crescent pass (capped at 180 — back to front once). */
+	float OrbitTravelDegrees = 0.f;
 	bool bYoYoReturning = false;
 
 	/** Camera locked behind Eri during homing dash (back sprite only). */

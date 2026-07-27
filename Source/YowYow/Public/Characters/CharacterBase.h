@@ -25,7 +25,7 @@ class UCameraShakeBase;
  * - USpriteDirectionComponent: component that will cache the player's camera, get its direction, compare it to this character's forward
  *		and generate sprite directionality based on it. The PaperZD ABP should consume from it to display the correct sprite
  * - UCharacterStateComponent: it dictates general states that will help us determine if certain actions can be performed at certain points
- *		Example: you can't move while attacking, or you can't attack while airborne (can only homing attack); etc.
+ *		Example: you can't move while attacking; air light/heavy are allowed; homing is a separate input; etc.
  *		Try to keep the states simple. For more meticulous states like stages of attacking (start, active, canCombo, recovery, etc) we can calculate that, for example,
  *		in the attack component. These are super basic general states to determine if a character can perform certain actions.
  */

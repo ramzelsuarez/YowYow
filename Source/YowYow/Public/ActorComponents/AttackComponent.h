@@ -28,7 +28,8 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(
 
 /**
  * Shared attack orchestrator for Eri and enemies.
- * While presentation is blocking (yoyo out/return), new inputs are buffered and fire when yoyo is home.
+ * While the yoyo is out / returning (presentation blocking), new inputs are buffered
+ * and fire when the yoyo is fully home.
  */
 UCLASS(ClassGroup = (Custom), meta = (BlueprintSpawnableComponent))
 class YOWYOW_API UAttackComponent : public UActorComponent
@@ -48,7 +49,7 @@ public:
 	void SetHandSources(USceneComponent* RightSource, USceneComponent* LeftSource);
 
 	/**
-	 * Eri: wait for full yoyo go+return before accepting the next attack.
+	 * Eri: wait for full yoyo go+return before accepting the next free attack.
 	 * Enemies leave this false (default).
 	 */
 	UFUNCTION(BlueprintCallable, Category = "Combat|YoYo")
@@ -80,7 +81,7 @@ private:
 	bool ExecuteMeleeAttack(const FAttackData& AttackData, EAttackType AttackType);
 	bool ExecuteRangedAttack(const FRangedAttackData& AttackData);
 	void CollectHitboxSources(const FAttackData& AttackData, TArray<USceneComponent*>& OutSources) const;
-	bool SpawnHitbox(const FAttackData& AttackData, USceneComponent* SourceOrNull);
+	bool SpawnHitbox(const FAttackData& AttackData, USceneComponent* SourceOrNull, float OrbitSideSign = -1.f);
 	void ResetNormalCombo();
 	void RestartNormalComboTimer();
 	void BeginRecovery(float RecoverySeconds);

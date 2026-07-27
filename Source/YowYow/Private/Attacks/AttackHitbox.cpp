@@ -28,7 +28,8 @@ AAttackHitbox::AAttackHitbox()
 void AAttackHitbox::Initialize(
 	AActor* InSourceActor,
 	const FAttackData& InAttackData,
-	USceneComponent* InAttachedSource
+	USceneComponent* InAttachedSource,
+	float InOrbitSideSign
 )
 {
 	SourceActor = InSourceActor;
@@ -36,6 +37,7 @@ void AAttackHitbox::Initialize(
 	AttackData = InAttackData;
 	Motion = InAttackData.Motion;
 	HitboxRadius = FMath::Max(InAttackData.HitboxRadius > 0.f ? InAttackData.HitboxRadius : 32.f, 1.f);
+	OrbitSideSign = FMath::IsNearlyZero(InOrbitSideSign) ? -1.f : FMath::Sign(InOrbitSideSign);
 
 	if (!SourceActor.IsValid())
 	{
@@ -60,7 +62,9 @@ void AAttackHitbox::Initialize(
 	Duration = Range / Speed;
 
 	CurrentArcAngle = AttackData.ArcStartDegrees;
-	OrbitAngleDegrees = 0.f;
+	// Crescent starts behind the attacker (180°) and sweeps 180° to the front once.
+	OrbitAngleDegrees = 180.f;
+	OrbitTravelDegrees = 0.f;
 	ElapsedTime = 0.f;
 
 	FVector InitialLocation = ArcCenter;
@@ -70,7 +74,8 @@ void AAttackHitbox::Initialize(
 		InitialLocation = AttachedSource->GetComponentLocation();
 		break;
 	case EAttackMotion::OrbitCircle:
-		InitialLocation = ArcCenter + AttackForward * Range;
+		// Back of the character.
+		InitialLocation = ArcCenter - AttackForward * Range;
 		break;
 	case EAttackMotion::ArcSweep:
 	default:
@@ -174,6 +179,10 @@ void AAttackHitbox::TickArcSweep(float DeltaTime)
 
 void AAttackHitbox::TickOrbitCircle(float DeltaTime)
 {
+	// Dual medialuna: start at back (180°), sweep once to front (0°/360°).
+	// SideSign -1 → through right (180→90→0). SideSign +1 → through left (180→270→360).
+	constexpr float CrescentTravelDegrees = 180.f;
+
 	const float Range = FMath::Max(AttackData.Range, AttackHitboxDefaults::MinimumRange);
 	const float Speed = AttackData.Speed > 0.f ? AttackData.Speed : AttackHitboxDefaults::DefaultSpeed;
 	const float AngularSpeed = FMath::RadiansToDegrees(Speed / Range);
@@ -182,14 +191,17 @@ void AAttackHitbox::TickOrbitCircle(float DeltaTime)
 	AttackRight = SourceActor->GetActorRightVector().GetSafeNormal2D();
 	ArcCenter = GetSourceLocation() + FVector::UpVector * AttackHitboxDefaults::TraceHeight;
 
-	OrbitAngleDegrees += AngularSpeed * DeltaTime;
+	OrbitTravelDegrees = FMath::Min(OrbitTravelDegrees + AngularSpeed * DeltaTime, CrescentTravelDegrees);
+	OrbitAngleDegrees = 180.f + OrbitSideSign * OrbitTravelDegrees;
+
 	const float AngleRadians = FMath::DegreesToRadians(OrbitAngleDegrees);
 	const FVector OrbitDirection =
 		AttackForward * FMath::Cos(AngleRadians) + AttackRight * FMath::Sin(AngleRadians);
 
 	MoveAndTrace(ArcCenter + OrbitDirection * Range, true);
 
-	if (OrbitAngleDegrees >= 360.f)
+	// One crescent only — stop at the front, never full loops.
+	if (OrbitTravelDegrees >= CrescentTravelDegrees)
 	{
 		FinishAttack();
 	}
@@ -270,13 +282,22 @@ void AAttackHitbox::HandleHit(AActor* HitActor)
 		nullptr
 	);
 
+	// Away from attacker (horizontal). Works for player hits on enemies and vice versa.
 	FVector KnockbackDir = HitActor->GetActorLocation() - SourceActor->GetActorLocation();
+	KnockbackDir.Z = 0.f;
 	if (KnockbackDir.IsNearlyZero())
 	{
-		KnockbackDir = SourceActor->GetActorForwardVector();
+		KnockbackDir = SourceActor->GetActorForwardVector().GetSafeNormal2D();
 	}
 
-	UCombatImpactLibrary::ApplyKnockback(HitActor, KnockbackDir, AttackData.Knockback);
+	UCombatImpactLibrary::ApplyKnockback(
+		HitActor,
+		KnockbackDir,
+		AttackData.Knockback,
+		/*bHorizontalOnly=*/true,
+		/*bOverrideXY=*/true,
+		/*bOverrideZ=*/false
+	);
 	UCombatImpactLibrary::ApplyHitStopPair(
 		SourceActor.Get(),
 		HitActor,

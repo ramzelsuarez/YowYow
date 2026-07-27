@@ -116,6 +116,7 @@ void AEriCharacter::ApplyYoYoMeshAssets()
 
 void AEriCharacter::CacheYoYoRests()
 {
+	// Only call while yoyos are at viewport rest (BeginPlay). Never mid-attack.
 	RightHand.Component = YoYoRight;
 	LeftHand.Component = YoYoLeft;
 
@@ -174,6 +175,7 @@ void AEriCharacter::HandleAttackFinished(EAttackType AttackType, bool bCompleted
 	// Hit window closed: begin return. Never snap home here.
 	if (PresentationMode == EYoYoPresentationMode::None)
 	{
+		// No active presentation (or already home) — unblock the attack cycle.
 		if (AttackComponent)
 		{
 			AttackComponent->NotifyPresentationComplete();
@@ -186,14 +188,11 @@ void AEriCharacter::HandleAttackFinished(EAttackType AttackType, bool bCompleted
 
 void AEriCharacter::BeginYoYoPresentation(const FAttackData& InAttackData)
 {
-	// Soft reset flags without snapping (rest already cached from BP).
+	// Rest pose is cached once in BeginPlay — never re-read mid-flight (that corrupts home).
 	bYoYoReturning = false;
-	OrbitAngleDegrees = 0.f;
+	OrbitTravelDegrees = 0.f;
 	RightHand.bActive = false;
 	LeftHand.bActive = false;
-
-	// Re-read rest in case BP moved them (editor-only usually); safe each attack start.
-	CacheYoYoRests();
 
 	CachedAttackForward = GetActorForwardVector().GetSafeNormal2D();
 	if (CachedAttackForward.IsNearlyZero())
@@ -222,20 +221,38 @@ void AEriCharacter::BeginYoYoPresentation(const FAttackData& InAttackData)
 
 	if (InAttackData.Motion == EAttackMotion::OrbitCircle)
 	{
+		// Dual medialunas: both start behind, sweep once to the front (one per side).
 		PresentationMode = EYoYoPresentationMode::Orbit;
-		float Phase = 0.f;
-		for (FYoYoRuntime* HandRuntime : Hands)
+		OrbitTravelDegrees = 0.f;
+
+		if (RightHand.Component.IsValid() && Hands.Contains(&RightHand))
 		{
-			HandRuntime->bActive = true;
-			HandRuntime->OrbitPhaseOffsetDegrees = Phase;
-			Phase += 180.f;
+			RightHand.bActive = true;
+			RightHand.OrbitSideSign = -1.f;
+		}
+		if (LeftHand.Component.IsValid() && Hands.Contains(&LeftHand))
+		{
+			LeftHand.bActive = true;
+			LeftHand.OrbitSideSign = +1.f;
+		}
+
+		if (!RightHand.bActive && !LeftHand.bActive)
+		{
+			for (int32 Index = 0; Index < Hands.Num(); ++Index)
+			{
+				Hands[Index]->bActive = true;
+				Hands[Index]->OrbitSideSign = (Index == 0) ? -1.f : +1.f;
+			}
 		}
 		return;
 	}
 
-	// Thrust: go out along cached forward, then return home.
+	// Thrust: start from viewport rest, fly toward the *centerline* apex (not side-offset),
+	// then return home. Keeps hits in front of Eri instead of off to each hip.
 	PresentationMode = EYoYoPresentationMode::Thrust;
 	const float Range = FMath::Max(InAttackData.Range, 1.f);
+	const FVector ActorLoc = GetActorLocation();
+
 	for (FYoYoRuntime* HandRuntime : Hands)
 	{
 		HandRuntime->bActive = true;
@@ -244,9 +261,14 @@ void AEriCharacter::BeginYoYoPresentation(const FAttackData& InAttackData)
 		{
 			continue;
 		}
+
 		const FVector RestWorld = GetRestWorldLocation(*HandRuntime);
 		Comp->SetWorldLocation(RestWorld);
-		HandRuntime->OutboundWorld = RestWorld + CachedAttackForward * Range;
+
+		// Same height as rest, but XY centered on the character so the path converges inward.
+		FVector Apex = ActorLoc + CachedAttackForward * Range;
+		Apex.Z = RestWorld.Z;
+		HandRuntime->OutboundWorld = Apex;
 	}
 }
 
@@ -286,7 +308,7 @@ void AEriCharacter::UpdateYoYoPresentation(float DeltaTime)
 	{
 		if (bYoYoReturning)
 		{
-			// Lerp both hands back to rest after orbit hit window ends.
+			// Lerp both hands back to rest after the crescent pass.
 			bool bAnyMoving = false;
 			auto ReturnHand = [&](FYoYoRuntime& Hand)
 			{
@@ -313,26 +335,34 @@ void AEriCharacter::UpdateYoYoPresentation(float DeltaTime)
 			return;
 		}
 
+		// Match hitbox: 180° travel from back to front, one medialuna per hand.
+		constexpr float CrescentTravelDegrees = 180.f;
 		const float AngularSpeed = FMath::RadiansToDegrees(YoYoCurrentSpeed / FMath::Max(OrbitRadius, 1.f));
-		OrbitAngleDegrees += AngularSpeed * DeltaTime;
+		OrbitTravelDegrees = FMath::Min(OrbitTravelDegrees + AngularSpeed * DeltaTime, CrescentTravelDegrees);
 
 		const FVector Center = GetActorLocation() + FVector::UpVector * 50.f;
 		const FVector Forward = CachedAttackForward;
 		const FVector Right = FVector::CrossProduct(FVector::UpVector, Forward).GetSafeNormal();
 
-		auto UpdateOrbitHand = [&](FYoYoRuntime& Hand)
+		auto UpdateCrescentHand = [&](FYoYoRuntime& Hand)
 		{
 			if (!Hand.bActive || !Hand.Component.IsValid())
 			{
 				return;
 			}
-			const float AngleRad = FMath::DegreesToRadians(OrbitAngleDegrees + Hand.OrbitPhaseOffsetDegrees);
+			const float AngleDeg = 180.f + Hand.OrbitSideSign * OrbitTravelDegrees;
+			const float AngleRad = FMath::DegreesToRadians(AngleDeg);
 			const FVector Dir = Forward * FMath::Cos(AngleRad) + Right * FMath::Sin(AngleRad);
 			Hand.Component->SetWorldLocation(Center + Dir * OrbitRadius);
 		};
 
-		UpdateOrbitHand(RightHand);
-		UpdateOrbitHand(LeftHand);
+		UpdateCrescentHand(RightHand);
+		UpdateCrescentHand(LeftHand);
+
+		if (OrbitTravelDegrees >= CrescentTravelDegrees)
+		{
+			StartYoYoReturn();
+		}
 		return;
 	}
 
@@ -392,7 +422,7 @@ void AEriCharacter::FinishYoYoPresentation()
 	ResetHand(LeftHand);
 	PresentationMode = EYoYoPresentationMode::None;
 	bYoYoReturning = false;
-	OrbitAngleDegrees = 0.f;
+	OrbitTravelDegrees = 0.f;
 
 	// Next buffered attack may start now.
 	if (AttackComponent)
@@ -437,25 +467,46 @@ void AEriCharacter::Look(const FInputActionValue& Value)
 
 void AEriCharacter::TryAttack()
 {
-	if (HomingAttackComponent && HomingAttackComponent->GetHomingState() == EHomingState::TargetFound)
+	// Air + soft-lock target → homing dash (original flow).
+	// Ground, or air without target → light combo.
+	if (HomingAttackComponent
+		&& HomingAttackComponent->GetHomingState() == EHomingState::TargetFound
+		&& CharacterStateComponent
+		&& CharacterStateComponent->GetLocomotionState() == ECharacterLocomotionState::Airborne)
 	{
-		if (CharacterStateComponent)
-		{
-			CharacterStateComponent->SetActionState(ECharacterActionState::Homing);
-		}
+		TryHomingAttack();
+		return;
+	}
 
-		SetHomingCameraLocked(true);
-		HomingAttackComponent->DoHomingAttack();
-	}
-	else
-	{
-		DoAttack(EAttackType::Normal);
-	}
+	DoAttack(EAttackType::Normal);
 }
 
 void AEriCharacter::TryAreaAttack()
 {
+	// Heavy / area works grounded and airborne (never hijacked by homing).
 	DoAttack(EAttackType::Area);
+}
+
+void AEriCharacter::TryHomingAttack()
+{
+	if (!HomingAttackComponent || HomingAttackComponent->GetHomingState() != EHomingState::TargetFound)
+	{
+		return;
+	}
+
+	if (CharacterStateComponent
+		&& CharacterStateComponent->GetLocomotionState() != ECharacterLocomotionState::Airborne)
+	{
+		return;
+	}
+
+	if (CharacterStateComponent)
+	{
+		CharacterStateComponent->SetActionState(ECharacterActionState::Homing);
+	}
+
+	SetHomingCameraLocked(true);
+	HomingAttackComponent->DoHomingAttack();
 }
 
 void AEriCharacter::EnterTrickMode()
@@ -498,12 +549,8 @@ void AEriCharacter::HandleHomingAttackFinished(const bool bSuccess)
 
 void AEriCharacter::SetHomingCameraLocked(bool bLocked)
 {
+	// No snap — Tick lerps yaw toward flight direction so the lock is readable.
 	bHomingCameraLocked = bLocked;
-	if (bLocked)
-	{
-		// Snap once so the first frame of dash already shows the back.
-		UpdateHomingCameraLock(0.f);
-	}
 }
 
 FVector AEriCharacter::GetHomingCameraFacingDirection() const
@@ -537,13 +584,13 @@ FVector AEriCharacter::GetHomingCameraFacingDirection() const
 
 void AEriCharacter::UpdateHomingCameraLock(float DeltaTime)
 {
-	if (!bHomingCameraLocked)
+	if (!bHomingCameraLocked || DeltaTime <= 0.f)
 	{
 		return;
 	}
 
-	AController* Controller = GetController();
-	if (!Controller)
+	AController* CharController = GetController();
+	if (!CharController)
 	{
 		return;
 	}
@@ -555,10 +602,11 @@ void AEriCharacter::UpdateHomingCameraLock(float DeltaTime)
 	}
 
 	const FRotator DesiredRot = Facing.Rotation();
-	FRotator ControlRot = Controller->GetControlRotation();
+	FRotator ControlRot = CharController->GetControlRotation();
 
-	if (HomingCameraYawInterpSpeed <= 0.f || DeltaTime <= 0.f)
+	if (HomingCameraYawInterpSpeed <= 0.f)
 	{
+		// 0 = explicit snap (debug / feel override).
 		ControlRot.Yaw = DesiredRot.Yaw;
 	}
 	else
@@ -570,7 +618,7 @@ void AEriCharacter::UpdateHomingCameraLock(float DeltaTime)
 		);
 	}
 
-	Controller->SetControlRotation(ControlRot);
+	CharController->SetControlRotation(ControlRot);
 }
 
 void AEriCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
@@ -607,6 +655,12 @@ void AEriCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompon
 		if (AreaAttackAction)
 		{
 			EnhancedInputComponent->BindAction(AreaAttackAction, ETriggerEvent::Started, this, &AEriCharacter::TryAreaAttack);
+		}
+
+		// Optional dedicated homing button. Attack in air+target still homes if this is unset.
+		if (HomingAction)
+		{
+			EnhancedInputComponent->BindAction(HomingAction, ETriggerEvent::Started, this, &AEriCharacter::TryHomingAttack);
 		}
 
 		if (TrickModeAction)
