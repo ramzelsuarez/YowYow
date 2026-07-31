@@ -14,16 +14,18 @@ class USpriteDirectionComponent;
 class UHealthComponent;
 class UAttackComponent;
 class UCharacterAttackData;
+class UCameraShakeBase;
 
 /**
  * this class is the base for all characters in the game, it should implement the following components: (besides obvious movement component etc)
  * - UPaperZDAnimationComponent: self explanatory and needed for all APaperZDCharacter children
  * - UHealthComponent: self explanatory / avoid if we have npcs (not sure if we will have them, but those don't engage in combat  and that would make this base character even simpler)
  * - UAttackComponent: self explanatory / avoid if we have npcs (not sure if we will have them, but those don't attack and that would make this base character even simpler)
+ *   All gameplay components (Attack/Health/State/etc) must be added on the Blueprint — C++ only finds them.
  * - USpriteDirectionComponent: component that will cache the player's camera, get its direction, compare it to this character's forward
  *		and generate sprite directionality based on it. The PaperZD ABP should consume from it to display the correct sprite
  * - UCharacterStateComponent: it dictates general states that will help us determine if certain actions can be performed at certain points
- *		Example: you can't move while attacking, or you can't attack while airborne (can only homing attack); etc.
+ *		Example: you can't move while attacking; air light/heavy are allowed; homing is a separate input; etc.
  *		Try to keep the states simple. For more meticulous states like stages of attacking (start, active, canCombo, recovery, etc) we can calculate that, for example,
  *		in the attack component. These are super basic general states to determine if a character can perform certain actions.
  */
@@ -58,6 +60,13 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Combat")
 	UCharacterAttackData* AttackData;
+
+	/** Player-only hurt feedback. Assign a CameraShake class in the BP. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Combat|Feedback")
+	TSubclassOf<UCameraShakeBase> DamageCameraShake;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Combat|Feedback", meta=(ClampMin="0.0"))
+	float DamageCameraShakeScale = 1.f;
 
 protected:
 	virtual void BeginPlay() override;
@@ -98,4 +107,16 @@ private:
 	
 	UFUNCTION()
 	void HandleLanded(const FHitResult& Hit);
+
+	UFUNCTION()
+	void HandleHealthDepleted(UHealthComponent* InHealthComponent, AActor* DamageCauser);
+
+	UFUNCTION()
+	void HandleHealthDamageTaken(
+		UHealthComponent* InHealthComponent,
+		int32 Damage,
+		int32 InCurrentHealth,
+		AActor* DamageCauser,
+		AController* DamageInstigator
+	);
 };

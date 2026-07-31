@@ -50,24 +50,29 @@ bool UEnemyAIComponent::CanAct() const
 {
 	if (!OwnerCharacter || !PlayerPawn || !StateComponent)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("CanAct failed | Owner: %s | Player: %s | State: %s"),
-			OwnerCharacter ? *OwnerCharacter->GetName() : TEXT("NULL"),
-			PlayerPawn ? *PlayerPawn->GetName() : TEXT("NULL"),
-			StateComponent ? *StateComponent->GetName() : TEXT("NULL")
-		);
-
 		return false;
 	}
 
 	if (StateComponent->GetLifeState() == ECharacterLifeState::Dead)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("CanAct failed | Enemy is dead"));
 		return false;
 	}
 
 	if (StateComponent->GetActionState() == ECharacterActionState::Attacking)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("CanAct failed | Enemy is attacking"));
+		return false;
+	}
+
+	// Hitstop: don't override launch with chase movement.
+	if (OwnerCharacter->CustomTimeDilation < 0.95f)
+	{
+		return false;
+	}
+
+	// Still riding knockback from LaunchCharacter — leave velocity alone.
+	if (KnockbackIgnoreSpeed > 0.f
+		&& OwnerCharacter->GetVelocity().SizeSquared2D() > FMath::Square(KnockbackIgnoreSpeed))
+	{
 		return false;
 	}
 

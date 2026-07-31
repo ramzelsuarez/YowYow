@@ -35,6 +35,13 @@ private:
 	UPROPERTY(EditAnywhere, Category = "Enemy AI")
 	float AttackCooldown = 1.5f;
 
+	/**
+	 * While horizontal speed is above this, skip chase/attack so knockback can play out.
+	 * Otherwise AddActorWorldOffset every tick cancels LaunchCharacter.
+	 */
+	UPROPERTY(EditAnywhere, Category = "Enemy AI|Combat", meta = (ClampMin = "0.0"))
+	float KnockbackIgnoreSpeed = 100.f;
+
 	UPROPERTY(EditAnywhere, Category = "Enemy AI|Wave")
 	AWaveEnemyManager* WaveManager = nullptr;
 

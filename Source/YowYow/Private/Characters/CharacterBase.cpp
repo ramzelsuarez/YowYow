@@ -8,8 +8,10 @@
 #include "CameraManagers/SpinningRiotCameraManager.h"
 #include "Kismet/GameplayStatics.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "GameFramework/PlayerController.h"
 #include "PaperFlipbookComponent.h"
 #include "ActorComponents/CharacterStateComponent.h"
+#include "Camera/CameraShakeBase.h"
 
 ACharacterBase::ACharacterBase()
 {
@@ -29,16 +31,30 @@ void ACharacterBase::BeginPlay()
 {
 	Super::BeginPlay();
 
+	// Components are added manually in BPs — never spawn them from C++ (avoids duplicates).
 	AttackComponent = FindComponentByClass<UAttackComponent>();
-	if (!AttackComponent)
-	{
-		AttackComponent = NewObject<UAttackComponent>(this, TEXT("AttackComponent"));
-		AttackComponent->RegisterComponent();
-	}
-
 	HealthComponent = FindComponentByClass<UHealthComponent>();
 	CharacterStateComponent = FindComponentByClass<UCharacterStateComponent>();
 	SpriteDirectionComponent = FindComponentByClass<USpriteDirectionComponent>();
+
+	if (!AttackComponent)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("%s missing UAttackComponent — add it on the Blueprint."), *GetName());
+	}
+	if (!HealthComponent)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("%s missing UHealthComponent — add it on the Blueprint."), *GetName());
+	}
+	if (!CharacterStateComponent)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("%s missing UCharacterStateComponent — add it on the Blueprint."), *GetName());
+	}
+
+	if (HealthComponent)
+	{
+		HealthComponent->OnHealthDepleted.AddDynamic(this, &ACharacterBase::HandleHealthDepleted);
+		HealthComponent->OnHealthDamageTaken.AddDynamic(this, &ACharacterBase::HandleHealthDamageTaken);
+	}
 
 	LandedDelegate.AddDynamic(this, &ACharacterBase::HandleLanded);
 	MovementModeChangedDelegate.AddDynamic(this, &ACharacterBase::HandleMovementModeChanged);
@@ -57,6 +73,12 @@ void ACharacterBase::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	LandedDelegate.RemoveDynamic(this, &ACharacterBase::HandleLanded);
 	MovementModeChangedDelegate.RemoveDynamic(this, &ACharacterBase::HandleMovementModeChanged);
 
+	if (HealthComponent)
+	{
+		HealthComponent->OnHealthDepleted.RemoveDynamic(this, &ACharacterBase::HandleHealthDepleted);
+		HealthComponent->OnHealthDamageTaken.RemoveDynamic(this, &ACharacterBase::HandleHealthDamageTaken);
+	}
+
 	if (CameraManager)
 	{
 		CameraManager->OnCameraRotationChanged.RemoveAll(this);
@@ -72,8 +94,15 @@ float ACharacterBase::TakeDamage(
 	AActor* DamageCauser
 )
 {
-	// take damage is a default UE method for ACharacter
-	// any custom damage-taking logic (i.e should the character take damage at this point?) should go here before the super call
+	if (HealthComponent && HealthComponent->IsDead())
+	{
+		return 0.f;
+	}
+
+	if (CharacterStateComponent && CharacterStateComponent->GetLifeState() == ECharacterLifeState::Dead)
+	{
+		return 0.f;
+	}
 
 	return Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
 }
@@ -111,15 +140,18 @@ void ACharacterBase::DoAttack(EAttackType AttackType)
 		return;
 	}
 
-	if (CharacterStateComponent)
+	if (HealthComponent && HealthComponent->IsDead())
 	{
-		CharacterStateComponent->SetAttackState(ECharacterAttackState::Attacking);
+		return;
 	}
 
-	if (!AttackComponent->TryAttack(AttackType) && CharacterStateComponent)
+	if (CharacterStateComponent && CharacterStateComponent->GetLifeState() == ECharacterLifeState::Dead)
 	{
-		CharacterStateComponent->SetAttackState(ECharacterAttackState::None);
+		return;
 	}
+
+	// AttackComponent owns attack/action states, facing lock, and recovery.
+	AttackComponent->TryAttack(AttackType);
 }
 
 void ACharacterBase::Jump()
@@ -137,7 +169,14 @@ void ACharacterBase::StopJumping()
 
 bool ACharacterBase::CanMove()
 {
-	return !CharacterStateComponent || CharacterStateComponent->GetAttackState() == ECharacterAttackState::None;
+	if (!CharacterStateComponent)
+	{
+		return true;
+	}
+
+	// Block locomotion during active hit window and post-hit recovery (area anti-spam).
+	const ECharacterAttackState AttackState = CharacterStateComponent->GetAttackState();
+	return AttackState == ECharacterAttackState::None;
 }
 
 void ACharacterBase::HandleCameraRotationChanged(const FRotator& CameraRotation)
@@ -171,4 +210,37 @@ void ACharacterBase::HandleLanded(const FHitResult& Hit)
 	{
 		CharacterStateComponent->SetLocomotionState(ECharacterLocomotionState::Grounded);
 	}
+}
+
+void ACharacterBase::HandleHealthDepleted(UHealthComponent* InHealthComponent, AActor* DamageCauser)
+{
+	if (CharacterStateComponent)
+	{
+		CharacterStateComponent->SetLifeState(ECharacterLifeState::Dead);
+		CharacterStateComponent->SetAttackState(ECharacterAttackState::None);
+		CharacterStateComponent->SetActionState(ECharacterActionState::Default);
+	}
+}
+
+void ACharacterBase::HandleHealthDamageTaken(
+	UHealthComponent* InHealthComponent,
+	int32 Damage,
+	int32 InCurrentHealth,
+	AActor* DamageCauser,
+	AController* DamageInstigator
+)
+{
+	if (!DamageCameraShake || Damage <= 0)
+	{
+		return;
+	}
+
+	// Hurt feedback is player-only (3 HP game — getting hit is rare).
+	APlayerController* PlayerController = Cast<APlayerController>(GetController());
+	if (!PlayerController)
+	{
+		return;
+	}
+
+	PlayerController->ClientStartCameraShake(DamageCameraShake, DamageCameraShakeScale);
 }

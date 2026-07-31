@@ -5,6 +5,7 @@
 #include "Types/AttackTypes.h"
 #include "AttackHitbox.generated.h"
 
+/** Consumed by UAttackComponent (attack lifecycle / combo). */
 DECLARE_MULTICAST_DELEGATE_OneParam(FAttackHitboxFinished, class AAttackHitbox*);
 
 class USceneComponent;
@@ -17,26 +18,36 @@ class YOWYOW_API AAttackHitbox : public AActor
 public:
 	AAttackHitbox();
 
+	/**
+	 * @param InAttachedSource Required when AttackData.Motion == FollowSource.
+	 * @param InOrbitSideSign OrbitCircle only: +1 = left crescent (back→left→front),
+	 *        -1 = right crescent (back→right→front). Ignored for other motions.
+	 */
 	void Initialize(
 		AActor* InSourceActor,
 		const FAttackData& InAttackData,
-		float InHitboxRadius,
-		USceneComponent* InAttachedSource = nullptr
+		USceneComponent* InAttachedSource = nullptr,
+		float InOrbitSideSign = -1.f
 	);
 
 	FAttackHitboxFinished OnFinished;
+
+	UPROPERTY(EditAnywhere, Category = "Debug")
+	bool bDrawDebug = false;
 
 protected:
 	virtual void Tick(float DeltaTime) override;
 
 private:
-	void TickAttached(float DeltaTime);
-	void TickRound(float DeltaTime);
+	void TickFollowSource(float DeltaTime);
+	void TickArcSweep(float DeltaTime);
+	void TickOrbitCircle(float DeltaTime);
 	FVector GetSourceLocation() const;
 	void MoveAndTrace(const FVector& NewLocation, bool bShouldTrace);
 	void TraceHits(const FVector& Start, const FVector& End);
 	void HandleHit(AActor* HitActor);
 	void FinishAttack();
+	void DrawDebugAt(const FVector& Location, const FVector& PreviousLocation, bool bShouldTrace) const;
 
 	UPROPERTY()
 	USceneComponent* SceneRoot = nullptr;
@@ -44,6 +55,7 @@ private:
 	TWeakObjectPtr<AActor> SourceActor;
 	TWeakObjectPtr<USceneComponent> AttachedSource;
 	FAttackData AttackData;
+	EAttackMotion Motion = EAttackMotion::ArcSweep;
 	FVector AttackForward = FVector::ForwardVector;
 	FVector AttackRight = FVector::RightVector;
 	FVector ArcCenter = FVector::ZeroVector;
@@ -51,8 +63,12 @@ private:
 
 	float HitboxRadius = 32.f;
 	float CurrentArcAngle = 90.f;
+	float OrbitAngleDegrees = 0.f;
+	/** Degrees traveled on this crescent (finish at 180 — back to front once). */
+	float OrbitTravelDegrees = 0.f;
+	/** +1 left medialuna, -1 right medialuna. */
+	float OrbitSideSign = -1.f;
 	float ElapsedTime = 0.f;
 	float Duration = 0.f;
-	bool bUseAttachedSource = false;
 	bool bFinished = false;
 };
