@@ -16,6 +16,8 @@
 #include "Engine/StaticMesh.h"
 #include "Interfaces/Homingable.h"
 #include "CharacterStates/HomingStates.h"
+#include "NiagaraComponent.h"
+#include "NiagaraSystem.h"
 
 AEriCharacter::AEriCharacter()
 {
@@ -41,6 +43,14 @@ AEriCharacter::AEriCharacter()
 	YoYoLeft = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("YoYoLeft"));
 	YoYoLeft->SetupAttachment(GetRootComponent());
 	YoYoLeft->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	
+	YoYoRightVFX = CreateDefaultSubobject<UNiagaraComponent>(TEXT("YoYoRightVFX"));
+	YoYoRightVFX->SetupAttachment(YoYoRight);
+	YoYoRightVFX->SetAutoActivate(false);
+
+	YoYoLeftVFX = CreateDefaultSubobject<UNiagaraComponent>(TEXT("YoYoLeftVFX"));
+	YoYoLeftVFX->SetupAttachment(YoYoLeft);
+	YoYoLeftVFX->SetAutoActivate(false);
 }
 
 void AEriCharacter::BeginPlay()
@@ -85,6 +95,8 @@ void AEriCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	{
 		HomingAttackComponent->OnHomingAttackFinished.RemoveDynamic(this, &AEriCharacter::HandleHomingAttackFinished);
 	}
+	
+	StopYoYoAttackVFX();
 
 	Super::EndPlay(EndPlayReason);
 }
@@ -167,6 +179,21 @@ FVector AEriCharacter::GetRestWorldLocation(const FYoYoRuntime& Hand) const
 
 void AEriCharacter::HandleAttackStarted(EAttackType AttackType, FAttackData StartedAttackData)
 {
+	switch (AttackType)
+	{
+	case EAttackType::Normal:
+		CurrentYoYoAttackVFX = NormalAttackVFXSystem;
+		break;
+
+	case EAttackType::Area:
+		CurrentYoYoAttackVFX = AreaAttackVFXSystem;
+		break;
+
+	default:
+		CurrentYoYoAttackVFX = nullptr;
+		break;
+	}
+
 	BeginYoYoPresentation(StartedAttackData);
 }
 
@@ -218,6 +245,8 @@ void AEriCharacter::BeginYoYoPresentation(const FAttackData& InAttackData)
 		}
 		return;
 	}
+	
+	StartYoYoAttackVFX();
 
 	if (InAttackData.Motion == EAttackMotion::OrbitCircle)
 	{
@@ -420,6 +449,9 @@ void AEriCharacter::FinishYoYoPresentation()
 
 	ResetHand(RightHand);
 	ResetHand(LeftHand);
+	
+	StopYoYoAttackVFX();
+	
 	PresentationMode = EYoYoPresentationMode::None;
 	bYoYoReturning = false;
 	OrbitTravelDegrees = 0.f;
@@ -428,6 +460,39 @@ void AEriCharacter::FinishYoYoPresentation()
 	if (AttackComponent)
 	{
 		AttackComponent->NotifyPresentationComplete();
+	}
+}
+
+void AEriCharacter::StartYoYoAttackVFX()
+{
+	if (!CurrentYoYoAttackVFX)
+	{
+		return;
+	}
+
+	if (YoYoRightVFX)
+	{
+		YoYoRightVFX->SetAsset(CurrentYoYoAttackVFX);
+		YoYoRightVFX->Activate(true);
+	}
+
+	if (YoYoLeftVFX)
+	{
+		YoYoLeftVFX->SetAsset(CurrentYoYoAttackVFX);
+		YoYoLeftVFX->Activate(true);
+	}
+}
+
+void AEriCharacter::StopYoYoAttackVFX()
+{
+	if (YoYoRightVFX)
+	{
+		YoYoRightVFX->Deactivate();
+	}
+
+	if (YoYoLeftVFX)
+	{
+		YoYoLeftVFX->Deactivate();
 	}
 }
 

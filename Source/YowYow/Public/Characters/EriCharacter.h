@@ -17,6 +17,8 @@ class UStaticMeshComponent;
 class UStaticMesh;
 class USceneComponent;
 class UAttackComponent;
+class UNiagaraComponent;
+class UNiagaraSystem;
 
 /**
  * Player character Eri.
@@ -68,6 +70,24 @@ protected:
 
 	UPROPERTY(EditAnywhere, Category = "Input Actions|Trick")
 	UInputAction* TrickInputAction = nullptr;
+	
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="VFX", meta=(AllowPrivateAccess="true"))
+	UNiagaraComponent* YoYoRightVFX = nullptr;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="VFX", meta=(AllowPrivateAccess="true"))
+	UNiagaraComponent* YoYoLeftVFX = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="VFX|YoYo")
+	UNiagaraSystem* NormalAttackVFXSystem = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="VFX|YoYo")
+	UNiagaraSystem* AreaAttackVFXSystem = nullptr;
+
+	UPROPERTY()
+	UNiagaraSystem* CurrentYoYoAttackVFX = nullptr;
+
+	void StartYoYoAttackVFX();
+	void StopYoYoAttackVFX();
 
 	void Move(const FInputActionValue& Value);
 	void JumpPressed();
