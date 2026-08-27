@@ -70,5 +70,8 @@ private:
 	float OrbitSideSign = -1.f;
 	float ElapsedTime = 0.f;
 	float Duration = 0.f;
+	/** Peak projection along AttackForward — used to detect the yoyo starting its return. */
+	float PeakAlongForward = 0.f;
+	bool bOutboundArmed = false;
 	bool bFinished = false;
 };

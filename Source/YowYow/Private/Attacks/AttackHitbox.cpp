@@ -66,6 +66,8 @@ void AAttackHitbox::Initialize(
 	OrbitAngleDegrees = 180.f;
 	OrbitTravelDegrees = 0.f;
 	ElapsedTime = 0.f;
+	PeakAlongForward = 0.f;
+	bOutboundArmed = false;
 
 	FVector InitialLocation = ArcCenter;
 	switch (Motion)
@@ -127,12 +129,41 @@ void AAttackHitbox::TickFollowSource(float DeltaTime)
 	}
 
 	ElapsedTime += DeltaTime;
-	const bool bShouldTrace = AttackData.FollowDamageWindow == EFollowSourceDamageWindow::FullPath
-		|| ElapsedTime <= Duration;
 
-	MoveAndTrace(AttachedSource->GetComponentLocation(), bShouldTrace);
+	const FVector SourceLoc = AttachedSource->GetComponentLocation();
+	const float AlongForward = FVector::DotProduct(SourceLoc - GetSourceLocation(), AttackForward);
 
-	if (ElapsedTime >= Duration)
+	if (AlongForward > PeakAlongForward + 1.f)
+	{
+		PeakAlongForward = AlongForward;
+		bOutboundArmed = true;
+	}
+
+	const bool bStartedReturn = bOutboundArmed && AlongForward + 2.f < PeakAlongForward;
+	const bool bFullPath = AttackData.FollowDamageWindow == EFollowSourceDamageWindow::FullPath;
+	const bool bShouldTrace = bFullPath || !bStartedReturn;
+
+	MoveAndTrace(SourceLoc, bShouldTrace);
+
+	// OutboundOnly: live until the yoyo turns around at the triangle apex.
+	// Safety cap in case presentation never returns (lost source, etc.).
+	const float SafetyDuration = FMath::Max(Duration * 4.f, Duration + 0.35f);
+	if (ElapsedTime >= SafetyDuration)
+	{
+		FinishAttack();
+		return;
+	}
+
+	if (bFullPath)
+	{
+		if (bStartedReturn && AlongForward <= 15.f)
+		{
+			FinishAttack();
+		}
+		return;
+	}
+
+	if (bStartedReturn)
 	{
 		FinishAttack();
 	}

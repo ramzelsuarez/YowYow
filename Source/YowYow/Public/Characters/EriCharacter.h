@@ -145,6 +145,8 @@ private:
 		TWeakObjectPtr<USceneComponent> Component;
 		FVector RestRelative = FVector::ZeroVector;
 		FVector OutboundWorld = FVector::ZeroVector;
+		/** World position at the start of the current thrust/return lerp. */
+		FVector PathStartWorld = FVector::ZeroVector;
 		/** +1 left crescent, -1 right crescent (Orbit presentation). */
 		float OrbitSideSign = -1.f;
 		bool bActive = false;
@@ -169,6 +171,9 @@ private:
 	float OrbitRadius = 100.f;
 	/** Degrees traveled this crescent pass (capped at 180 — back to front once). */
 	float OrbitTravelDegrees = 0.f;
+	/** Shared 0→1 lerp so both yoyos arrive at the triangle apex together. */
+	float ThrustElapsed = 0.f;
+	float ThrustDuration = 0.f;
 	bool bYoYoReturning = false;
 
 	/** Camera locked behind Eri during homing dash (back sprite only). */
