@@ -88,6 +88,21 @@ protected:
 
 	void StartYoYoAttackVFX();
 	void StopYoYoAttackVFX();
+	
+	/** Temporary looping aura used to preview Trick Mode VFX. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VFX|Trick")
+	UNiagaraComponent* TrickAuraVFX = nullptr;
+
+	/** Niagara system assigned in BP for the Trick Mode aura. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "VFX|Trick")
+	UNiagaraSystem* TrickAuraVFXSystem = nullptr;
+	
+	// Just to debug the VFX
+	UPROPERTY(EditAnywhere, Category = "Input Actions|Debug")
+	UInputAction* TrickAuraDebugAction = nullptr;
+
+	/** Temporary debug toggle until actual Trick Mode activation is implemented. */
+	void ToggleTrickAuraVFX();
 
 	void Move(const FInputActionValue& Value);
 	void JumpPressed();

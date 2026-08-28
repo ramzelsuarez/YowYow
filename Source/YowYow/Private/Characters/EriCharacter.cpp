@@ -51,6 +51,11 @@ AEriCharacter::AEriCharacter()
 	YoYoLeftVFX = CreateDefaultSubobject<UNiagaraComponent>(TEXT("YoYoLeftVFX"));
 	YoYoLeftVFX->SetupAttachment(YoYoLeft);
 	YoYoLeftVFX->SetAutoActivate(false);
+	
+	// Trick Aura VFX
+	TrickAuraVFX = CreateDefaultSubobject<UNiagaraComponent>(TEXT("TrickAuraVFX"));
+	TrickAuraVFX->SetupAttachment(GetRootComponent());
+	TrickAuraVFX->SetAutoActivate(false);
 }
 
 void AEriCharacter::BeginPlay()
@@ -79,6 +84,11 @@ void AEriCharacter::BeginPlay()
 	{
 		HomingAttackComponent->OnHomingAttackFinished.AddDynamic(this, &AEriCharacter::HandleHomingAttackFinished);
 	}
+	
+	if (TrickAuraVFXSystem && TrickAuraVFX)
+	{
+		TrickAuraVFX->SetAsset(TrickAuraVFXSystem);
+	}
 }
 
 void AEriCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -97,7 +107,13 @@ void AEriCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	}
 	
 	StopYoYoAttackVFX();
-
+	
+	// for trick VFX
+	if (TrickAuraVFX)
+	{
+		TrickAuraVFX->DeactivateImmediate();
+	}
+	
 	Super::EndPlay(EndPlayReason);
 }
 
@@ -733,13 +749,53 @@ void AEriCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompon
 			EnhancedInputComponent->BindAction(TrickModeAction, ETriggerEvent::Started, this, &AEriCharacter::EnterTrickMode);
 			EnhancedInputComponent->BindAction(TrickModeAction, ETriggerEvent::Completed, this, &AEriCharacter::ExitTrickMode);
 		}
+		
+		//debug
 		if (TrickInputAction)
 		{
-			EnhancedInputComponent->BindAction(TrickInputAction, ETriggerEvent::Triggered, this, &AEriCharacter::TryTrickInput);
+			EnhancedInputComponent->BindAction(
+			   TrickInputAction,
+			   ETriggerEvent::Triggered,
+			   this,
+			   &AEriCharacter::TryTrickInput
+			);
+		}
+
+		// Temporary Trick Aura VFX debug input.
+		if (TrickAuraDebugAction)
+		{
+			EnhancedInputComponent->BindAction(
+			   TrickAuraDebugAction,
+			   ETriggerEvent::Started,
+			   this,
+			   &AEriCharacter::ToggleTrickAuraVFX
+			);
 		}
 	}
 	else
 	{
 		UE_LOG(LogTemp, Warning, TEXT("%s is not using an EnhancedInputComponent"), *GetName());
+	}
+}
+
+void AEriCharacter::ToggleTrickAuraVFX()
+{
+	if (!TrickAuraVFX)
+	{
+		return;
+	}
+
+	if (!TrickAuraVFX->GetAsset())
+	{
+		return;
+	}
+
+	if (TrickAuraVFX->IsActive())
+	{
+		TrickAuraVFX->Deactivate();
+	}
+	else
+	{
+		TrickAuraVFX->Activate(true);
 	}
 }
