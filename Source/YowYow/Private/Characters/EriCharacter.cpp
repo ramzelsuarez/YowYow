@@ -19,7 +19,6 @@
 #include "NiagaraComponent.h"
 #include "NiagaraSystem.h"
 #include "PaperFlipbookComponent.h"
-#include "AnimSequences/PaperZDAnimSequence.h"
 
 AEriCharacter::AEriCharacter()
 {
@@ -110,7 +109,7 @@ void AEriCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	}
 	
 	StopYoYoAttackVFX();
-	StopYoYoAttackAnim();
+	ClearPresentationAttackType();
 	
 	// for trick VFX
 	if (TrickAuraVFX)
@@ -129,7 +128,6 @@ void AEriCharacter::Tick(float DeltaTime)
 		AttachYoYosToHandSockets();
 	}
 	UpdateYoYoPresentation(DeltaTime);
-	TryStartYoYoCatchAnim();
 	UpdateHomingCameraLock(DeltaTime);
 }
 
@@ -286,6 +284,7 @@ void AEriCharacter::HandleAttackStarted(EAttackType AttackType, FAttackData Star
 		break;
 	}
 
+	PresentationAttackType = AttackType;
 	BeginYoYoPresentation(StartedAttackData);
 }
 
@@ -339,8 +338,6 @@ void AEriCharacter::BeginYoYoPresentation(const FAttackData& InAttackData)
 	}
 
 	AttackYoYoHand = InAttackData.YoYoHand;
-	ActiveAttackAnimSequence = ResolveAttackAnimSequence(InAttackData);
-	PlayYoYoThrowAnim();
 
 	for (FYoYoRuntime* HandRuntime : Hands)
 	{
@@ -429,7 +426,7 @@ void AEriCharacter::BeginYoYoPresentation(const FAttackData& InAttackData)
 
 void AEriCharacter::BeginHomingYoyoCharge()
 {
-	StopYoYoAttackAnim();
+	ClearPresentationAttackType();
 
 	if (PresentationMode != EYoYoPresentationMode::None && PresentationMode != EYoYoPresentationMode::Homing)
 	{
@@ -692,137 +689,27 @@ void AEriCharacter::FinishYoYoPresentation()
 	ThrustDuration = 0.f;
 
 	AttachYoYosToHandSockets();
-	TryStartYoYoCatchAnim();
 
 	// Next buffered attack may start now.
 	if (AttackComponent)
 	{
 		AttackComponent->NotifyPresentationComplete();
 	}
+
+	if (PresentationMode == EYoYoPresentationMode::None)
+	{
+		ClearPresentationAttackType();
+	}
 }
 
 EAttackType AEriCharacter::GetActiveAttackType() const
 {
-	return AttackComponent ? AttackComponent->GetActiveAttackType() : EAttackType::Normal;
+	return PresentationAttackType;
 }
 
-UPaperZDAnimSequence* AEriCharacter::GetActiveAttackAnimSequence() const
+void AEriCharacter::ClearPresentationAttackType()
 {
-	return ActiveAttackAnimSequence.Get();
-}
-
-UPaperZDAnimSequence* AEriCharacter::ResolveAttackAnimSequence(const FAttackData& InAttackData) const
-{
-	if (InAttackData.Motion == EAttackMotion::OrbitCircle && AreaAttackAnimSequence)
-	{
-		return AreaAttackAnimSequence.Get();
-	}
-
-	switch (InAttackData.YoYoHand)
-	{
-	case EYoYoHand::Left:
-		return AttackAnimSequenceLeft.Get();
-	case EYoYoHand::Both:
-		return AttackAnimSequenceBoth.Get();
-	case EYoYoHand::Right:
-	default:
-		return AttackAnimSequenceRight.Get();
-	}
-}
-
-void AEriCharacter::PlayYoYoThrowAnim()
-{
-	AttackAnimPhase = EYoYoAttackAnimPhase::Throw;
-}
-
-void AEriCharacter::PlayYoYoCatchAnim()
-{
-	AttackAnimPhase = EYoYoAttackAnimPhase::Catch;
-
-	UWorld* World = GetWorld();
-	UPaperZDAnimSequence* Sequence = GetActiveAttackAnimSequence();
-	if (!World)
-	{
-		return;
-	}
-
-	World->GetTimerManager().ClearTimer(CatchAnimTimerHandle);
-	const float CatchDuration = Sequence ? Sequence->GetTotalDuration() : 0.f;
-	if (CatchDuration <= KINDA_SMALL_NUMBER)
-	{
-		FinishCatchAttackAnim();
-		return;
-	}
-
-	World->GetTimerManager().SetTimer(
-		CatchAnimTimerHandle,
-		this,
-		&AEriCharacter::FinishCatchAttackAnim,
-		CatchDuration,
-		false
-	);
-}
-
-void AEriCharacter::StopYoYoAttackAnim()
-{
-	AttackAnimPhase = EYoYoAttackAnimPhase::None;
-	ActiveAttackAnimSequence = nullptr;
-	if (UWorld* World = GetWorld())
-	{
-		World->GetTimerManager().ClearTimer(CatchAnimTimerHandle);
-	}
-}
-
-void AEriCharacter::FinishCatchAttackAnim()
-{
-	StopYoYoAttackAnim();
-}
-
-void AEriCharacter::TryStartYoYoCatchAnim()
-{
-	if (AttackAnimPhase != EYoYoAttackAnimPhase::Throw)
-	{
-		return;
-	}
-
-	if (PresentationMode != EYoYoPresentationMode::None)
-	{
-		if (!bYoYoReturning)
-		{
-			return;
-		}
-
-		if (GetFarthestActiveYoYoHomeDistance() > YoYoCatchAnimDistance)
-		{
-			return;
-		}
-	}
-
-	PlayYoYoCatchAnim();
-}
-
-float AEriCharacter::GetFarthestActiveYoYoHomeDistance() const
-{
-	float Farthest = 0.f;
-	bool bAny = false;
-
-	auto Consider = [&](const FYoYoRuntime& Hand)
-	{
-		if (!Hand.bActive || !Hand.Component.IsValid())
-		{
-			return;
-		}
-
-		bAny = true;
-		Farthest = FMath::Max(
-			Farthest,
-			FVector::Dist(Hand.Component->GetComponentLocation(), GetRestWorldLocation(Hand))
-		);
-	};
-
-	Consider(RightHand);
-	Consider(LeftHand);
-	return bAny ? Farthest : 0.f;
+	PresentationAttackType = EAttackType::None;
 }
 
 void AEriCharacter::StartYoYoAttackVFX()

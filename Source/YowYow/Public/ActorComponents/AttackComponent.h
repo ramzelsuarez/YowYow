@@ -128,6 +128,6 @@ private:
 	bool bHasBufferedAttack = false;
 	EAttackType BufferedAttackType = EAttackType::Normal;
 
-	EAttackType ActiveAttackType = EAttackType::Normal;
+	EAttackType ActiveAttackType = EAttackType::None;
 	float ActiveRecoveryTime = 0.f;
 };

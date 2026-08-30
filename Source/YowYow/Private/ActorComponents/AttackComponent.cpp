@@ -114,6 +114,8 @@ void UAttackComponent::NotifyPresentationComplete()
 		bActiveAttackIsNormal = false;
 	}
 
+	ActiveAttackType = EAttackType::None;
+
 	// Buffered input pressed during go/return fires here (next Normal index).
 	TryConsumeBufferedAttack();
 }
@@ -507,6 +509,7 @@ void UAttackComponent::CompleteAttackCycle(bool bCompleted)
 	bInRecovery = false;
 	ApplyAttackFacingLock(false);
 	SetAttackingStates(false);
+	ActiveAttackType = EAttackType::None;
 
 	if (!bPresentationBlocking)
 	{

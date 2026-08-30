@@ -9,6 +9,7 @@ enum class EAttackType : uint8
 	Normal UMETA(DisplayName = "Normal"),
 	Area UMETA(DisplayName = "Area"),
 	Ranged UMETA(DisplayName = "Ranged"),
+	None UMETA(DisplayName = "None"),
 };
 
 UENUM(BlueprintType)
@@ -41,15 +42,6 @@ enum class EYoYoHand : uint8
 	Right UMETA(DisplayName = "Right"),
 	Left UMETA(DisplayName = "Left"),
 	Both UMETA(DisplayName = "Both"),
-};
-
-/** ABP attack pose: Throw holds last frame in-state; Catch is reverse. */
-UENUM(BlueprintType)
-enum class EYoYoAttackAnimPhase : uint8
-{
-	None UMETA(DisplayName = "None"),
-	Throw UMETA(DisplayName = "Throw"),
-	Catch UMETA(DisplayName = "Catch"),
 };
 
 USTRUCT(BlueprintType)
