@@ -63,6 +63,9 @@ public:
 	bool IsAttackActive() const;
 
 	UFUNCTION(BlueprintPure, Category = "Combat")
+	EAttackType GetActiveAttackType() const { return ActiveAttackType; }
+
+	UFUNCTION(BlueprintPure, Category = "Combat")
 	bool IsPresentationBlocking() const { return bPresentationBlocking; }
 
 	UPROPERTY(BlueprintAssignable, Category = "Combat")

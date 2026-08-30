@@ -37,6 +37,10 @@ public:
 	UFUNCTION(BlueprintCallable)
 	void DoHomingAttack();
 
+	/** Charging yoyos reached the target — Eri starts the dash. */
+	UFUNCTION(BlueprintCallable)
+	void BeginLaunch();
+
 	/** Abort in-flight homing (grounded, lost target, etc.). Broadcasts finished(false). */
 	UFUNCTION(BlueprintCallable)
 	void CancelHomingAttack();
@@ -46,6 +50,12 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "Homing")
 	bool IsHomingInFlight() const;
+
+	UFUNCTION(BlueprintPure, Category = "Homing")
+	float GetHitDistance() const { return HitDistance; }
+
+	UFUNCTION(BlueprintPure, Category = "Homing")
+	float GetHomingSpeed() const { return InitialHomingSpeed; }
 
 	UPROPERTY(BlueprintAssignable)
 	FOnHomingAttackFinished OnHomingAttackFinished;
@@ -69,6 +79,7 @@ protected:
 	void ClearTarget();
 	void FinishHomingAttack();
 	void ProcessRecoveryState();
+	void SetChargingSuspended(bool bSuspend);
 
 	UPROPERTY()
 	AActor* CurrentTarget = nullptr;
@@ -97,6 +108,8 @@ protected:
 private:
 	EHomingState HomingState = EHomingState::Idle;
 	FTimerHandle HomingCooldownTimer;
+	float CachedGravityScale = 1.f;
+	bool bChargingSuspended = false;
 
 public:
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType,

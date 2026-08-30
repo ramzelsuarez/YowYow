@@ -79,8 +79,6 @@ void AEnemyCharacter::HandleEnemyHealthDepleted(UHealthComponent* InHealthCompon
 		WaveManager->RegisterEnemyDefeated(this);
 	}
 
-	SetActorEnableCollision(false);
-
 	UWorld* World = GetWorld();
 	if (!World)
 	{

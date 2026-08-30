@@ -5,6 +5,7 @@
 
 #include "ActorComponents/CharacterStateComponent.h"
 #include "Characters/CharacterBase.h"
+#include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PawnMovementComponent.h"
 #include "Interfaces/Homingable.h"
 #include "Kismet/KismetSystemLibrary.h"
@@ -32,7 +33,9 @@ bool UHomingAttackComponent::CanSearchTargets()
 
 bool UHomingAttackComponent::IsHomingInFlight() const
 {
-	return HomingState == EHomingState::Launching || HomingState == EHomingState::Hit;
+	return HomingState == EHomingState::Charging
+		|| HomingState == EHomingState::Launching
+		|| HomingState == EHomingState::Hit;
 }
 
 void UHomingAttackComponent::DoHomingAttack()
@@ -42,12 +45,53 @@ void UHomingAttackComponent::DoHomingAttack()
 		return;
 	}
 
+	HomingState = EHomingState::Charging;
+	SetChargingSuspended(true);
+}
+
+void UHomingAttackComponent::BeginLaunch()
+{
+	if (HomingState != EHomingState::Charging || !IsValid(CurrentTarget) || !OwnerCharacter)
+	{
+		return;
+	}
+
+	SetChargingSuspended(false);
 	HomingState = EHomingState::Launching;
 
 	const FVector TargetLocation = IHomingable::Execute_GetTargetLocation(CurrentTarget);
 	const FVector Direction = (TargetLocation - OwnerCharacter->GetActorLocation()).GetSafeNormal();
-
 	OwnerCharacter->LaunchCharacter(Direction * InitialHomingSpeed, true, true);
+}
+
+void UHomingAttackComponent::SetChargingSuspended(bool bSuspend)
+{
+	UCharacterMovementComponent* Movement = Cast<UCharacterMovementComponent>(OwnerMovementComponent);
+	if (!Movement)
+	{
+		return;
+	}
+
+	if (bSuspend)
+	{
+		if (!bChargingSuspended)
+		{
+			CachedGravityScale = Movement->GravityScale;
+		}
+		bChargingSuspended = true;
+		Movement->GravityScale = 0.f;
+		Movement->StopMovementImmediately();
+		Movement->Velocity = FVector::ZeroVector;
+		return;
+	}
+
+	if (!bChargingSuspended)
+	{
+		return;
+	}
+
+	Movement->GravityScale = CachedGravityScale;
+	bChargingSuspended = false;
 }
 
 void UHomingAttackComponent::CancelHomingAttack()
@@ -63,6 +107,7 @@ void UHomingAttackComponent::CancelHomingAttack()
 		return;
 	}
 
+	SetChargingSuspended(false);
 	ClearTarget();
 	HomingState = EHomingState::Idle;
 	OnHomingAttackFinished.Broadcast(false);
@@ -282,7 +327,7 @@ void UHomingAttackComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 
 	if (!bCanHomingExist)
 	{
-		if (IsHomingInFlight())
+		if (IsHomingInFlight() || HomingState == EHomingState::Charging)
 		{
 			CancelHomingAttack();
 		}
@@ -300,6 +345,17 @@ void UHomingAttackComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 	case EHomingState::Searching:
 	case EHomingState::TargetFound:
 		HomingState = GetBestTarget() ? EHomingState::TargetFound : EHomingState::Searching;
+		break;
+
+	case EHomingState::Charging:
+		if (UCharacterMovementComponent* Movement = Cast<UCharacterMovementComponent>(OwnerMovementComponent))
+		{
+			Movement->Velocity = FVector::ZeroVector;
+		}
+		if (!IsValid(CurrentTarget))
+		{
+			CancelHomingAttack();
+		}
 		break;
 
 	case EHomingState::Launching:

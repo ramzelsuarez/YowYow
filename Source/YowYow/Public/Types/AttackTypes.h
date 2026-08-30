@@ -43,6 +43,15 @@ enum class EYoYoHand : uint8
 	Both UMETA(DisplayName = "Both"),
 };
 
+/** ABP attack pose: Throw holds last frame in-state; Catch is reverse. */
+UENUM(BlueprintType)
+enum class EYoYoAttackAnimPhase : uint8
+{
+	None UMETA(DisplayName = "None"),
+	Throw UMETA(DisplayName = "Throw"),
+	Catch UMETA(DisplayName = "Catch"),
+};
+
 USTRUCT(BlueprintType)
 struct FAttackDataBase
 {

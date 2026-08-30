@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Characters/CharacterBase.h"
+#include "Engine/TimerHandle.h"
 #include "Types/AttackTypes.h"
 #include "EriCharacter.generated.h"
 
@@ -19,6 +20,7 @@ class USceneComponent;
 class UAttackComponent;
 class UNiagaraComponent;
 class UNiagaraSystem;
+class UPaperZDAnimSequence;
 
 /**
  * Player character Eri.
@@ -36,6 +38,15 @@ public:
 	/** True while a yoyo is mid thrust/orbit/return (blocks / buffers next attack). */
 	UFUNCTION(BlueprintPure, Category = "YoYo")
 	bool IsYoYoPresentationActive() const { return PresentationMode != EYoYoPresentationMode::None; }
+
+	UFUNCTION(BlueprintPure, Category = "YoYo|Animation")
+	EYoYoAttackAnimPhase GetYoYoAttackAnimPhase() const { return AttackAnimPhase; }
+
+	UFUNCTION(BlueprintPure, Category = "YoYo|Animation")
+	EYoYoHand GetAttackYoYoHand() const { return AttackYoYoHand; }
+
+	UFUNCTION(BlueprintPure, Category = "YoYo|Animation")
+	EAttackType GetActiveAttackType() const;
 
 	UFUNCTION(BlueprintPure, Category = "Homing")
 	bool IsHomingCameraLocked() const { return bHomingCameraLocked; }
@@ -163,6 +174,24 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "YoYo|Sockets")
 	FName YoYoLeftSocketName = TEXT("Hand_L");
 
+	/** PaperZD sequences: same mapping as attack YoYoHand (Normal 0/1/2). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "YoYo|Animation")
+	TObjectPtr<UPaperZDAnimSequence> AttackAnimSequenceRight;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "YoYo|Animation")
+	TObjectPtr<UPaperZDAnimSequence> AttackAnimSequenceLeft;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "YoYo|Animation")
+	TObjectPtr<UPaperZDAnimSequence> AttackAnimSequenceBoth;
+
+	/** Optional; if unset, area uses AttackAnimSequenceBoth. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "YoYo|Animation")
+	TObjectPtr<UPaperZDAnimSequence> AreaAttackAnimSequence;
+
+	/** Start the catch (reverse) clip when the farthest active yoyo is this close to its rest/socket. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "YoYo|Animation", meta = (ClampMin = "0.0"))
+	float YoYoCatchAnimDistance = 120.f;
+
 	/** How fast control yaw catches up to flight direction while homing (deg/s). 0 = snap. Fast but readable. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Homing|Camera", meta = (ClampMin = "0.0"))
 	float HomingCameraYawInterpSpeed = 540.f;
@@ -179,7 +208,8 @@ private:
 	{
 		None,
 		Thrust,
-		Orbit
+		Orbit,
+		Homing
 	};
 
 	struct FYoYoRuntime
@@ -207,12 +237,23 @@ private:
 	);
 	void DetachYoYoForFlight(USceneComponent* YoYo);
 	void BeginYoYoPresentation(const FAttackData& InAttackData);
+	void BeginHomingYoyoCharge();
 	void UpdateYoYoPresentation(float DeltaTime);
+	void UpdateHomingYoyos(float DeltaTime);
 	void StartYoYoReturn();
 	void FinishYoYoPresentation();
 	void GatherHands(EYoYoHand Hand, TArray<FYoYoRuntime*>& OutHands);
 	FVector GetRestWorldLocation(const FYoYoRuntime& Hand) const;
 	bool AreActiveYoYosAtTarget(bool bReturning) const;
+
+	void PlayYoYoThrowAnim();
+	void PlayYoYoCatchAnim();
+	void StopYoYoAttackAnim();
+	void TryStartYoYoCatchAnim();
+	float GetFarthestActiveYoYoHomeDistance() const;
+	UPaperZDAnimSequence* GetActiveAttackAnimSequence() const;
+	UPaperZDAnimSequence* ResolveAttackAnimSequence(const FAttackData& InAttackData) const;
+	void FinishCatchAttackAnim();
 
 	FYoYoRuntime RightHand;
 	FYoYoRuntime LeftHand;
@@ -227,6 +268,10 @@ private:
 	float ThrustElapsed = 0.f;
 	float ThrustDuration = 0.f;
 	bool bYoYoReturning = false;
+	EYoYoAttackAnimPhase AttackAnimPhase = EYoYoAttackAnimPhase::None;
+	EYoYoHand AttackYoYoHand = EYoYoHand::Right;
+	TObjectPtr<UPaperZDAnimSequence> ActiveAttackAnimSequence;
+	FTimerHandle CatchAnimTimerHandle;
 
 	/** Camera locked behind Eri during homing dash (back sprite only). */
 	bool bHomingCameraLocked = false;

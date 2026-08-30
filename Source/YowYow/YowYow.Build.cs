@@ -8,7 +8,7 @@ public class YowYow : ModuleRules
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 	
-		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput", "AIModule", "GeometryCollectionEngine", "NavigationSystem", "Niagara", "UMG" });
+		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput", "AIModule", "GeometryCollectionEngine", "NavigationSystem", "Niagara", "UMG", "PaperZD" });
 
 		PrivateDependencyModuleNames.AddRange(new string[] {  });
 
