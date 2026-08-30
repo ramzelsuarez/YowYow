@@ -53,6 +53,9 @@ protected:
 	virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
 	virtual void Tick(float DeltaTime) override;
 
+	void PrecacheCombatVFX();
+	void FinishNiagaraPrecache();
+
 	UPROPERTY(EditAnywhere, Category = "Input Actions|Movement")
 	UInputAction* MovementAction = nullptr;
 
@@ -257,4 +260,6 @@ private:
 
 	/** Camera locked behind Eri during homing dash (back sprite only). */
 	bool bHomingCameraLocked = false;
+
+	FTimerHandle NiagaraPrecacheTimerHandle;
 };

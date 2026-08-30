@@ -144,10 +144,22 @@ bool ACharacterBase::DoAttack(EAttackType AttackType)
 
 void ACharacterBase::Jump()
 {
-	// jump is a default UE method for ACharacter
-	// any custom jumping logic (i.e should the character be jumping at this point?) should go here before the super call
-	// same for StopJumping down below
+	if (!CanMove())
+	{
+		return;
+	}
+
 	Super::Jump();
+}
+
+bool ACharacterBase::IsDead() const
+{
+	if (HealthComponent && HealthComponent->IsDead())
+	{
+		return true;
+	}
+
+	return CharacterStateComponent && CharacterStateComponent->GetLifeState() == ECharacterLifeState::Dead;
 }
 
 void ACharacterBase::StopJumping()
@@ -157,6 +169,11 @@ void ACharacterBase::StopJumping()
 
 bool ACharacterBase::CanMove()
 {
+	if (IsDead())
+	{
+		return false;
+	}
+
 	if (!CharacterStateComponent)
 	{
 		return true;
@@ -207,6 +224,11 @@ void ACharacterBase::HandleHealthDepleted(UHealthComponent* InHealthComponent, A
 		CharacterStateComponent->SetLifeState(ECharacterLifeState::Dead);
 		CharacterStateComponent->SetAttackState(ECharacterAttackState::None);
 		CharacterStateComponent->SetActionState(ECharacterActionState::Default);
+	}
+
+	if (UCharacterMovementComponent* Movement = GetCharacterMovement())
+	{
+		Movement->StopMovementImmediately();
 	}
 
 	if (IsPlayerControlled())

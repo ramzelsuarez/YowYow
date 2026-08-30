@@ -18,6 +18,7 @@
 #include "CharacterStates/HomingStates.h"
 #include "NiagaraComponent.h"
 #include "NiagaraSystem.h"
+#include "TimerManager.h"
 #include "PaperFlipbookComponent.h"
 
 AEriCharacter::AEriCharacter()
@@ -91,6 +92,8 @@ void AEriCharacter::BeginPlay()
 	{
 		TrickAuraVFX->SetAsset(TrickAuraVFXSystem);
 	}
+
+	PrecacheCombatVFX();
 }
 
 void AEriCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -108,6 +111,11 @@ void AEriCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
 		HomingAttackComponent->OnHomingAttackFinished.RemoveDynamic(this, &AEriCharacter::HandleHomingAttackFinished);
 	}
 	
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(NiagaraPrecacheTimerHandle);
+	}
+
 	StopYoYoAttackVFX();
 	ClearPresentationAttackType();
 	
@@ -715,6 +723,59 @@ void AEriCharacter::ClearPresentationAttackType()
 	PresentationAttackType = EAttackType::None;
 }
 
+void AEriCharacter::PrecacheCombatVFX()
+{
+	auto Prime = [](UNiagaraComponent* Comp, UNiagaraSystem* System)
+	{
+		if (!Comp || !System)
+		{
+			return;
+		}
+
+#if WITH_EDITOR
+		System->RequestCompile(false);
+#endif
+		Comp->SetAsset(System);
+		Comp->SetHiddenInGame(true);
+		Comp->SetVisibility(false);
+		Comp->Activate(true);
+	};
+
+	Prime(YoYoRightVFX, NormalAttackVFXSystem);
+	Prime(YoYoLeftVFX, AreaAttackVFXSystem);
+	Prime(TrickAuraVFX, TrickAuraVFXSystem);
+
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().SetTimer(
+			NiagaraPrecacheTimerHandle,
+			this,
+			&AEriCharacter::FinishNiagaraPrecache,
+			0.25f,
+			false
+		);
+	}
+}
+
+void AEriCharacter::FinishNiagaraPrecache()
+{
+	auto Restore = [](UNiagaraComponent* Comp)
+	{
+		if (!Comp)
+		{
+			return;
+		}
+
+		Comp->DeactivateImmediate();
+		Comp->SetHiddenInGame(false);
+		Comp->SetVisibility(true);
+	};
+
+	Restore(YoYoRightVFX);
+	Restore(YoYoLeftVFX);
+	Restore(TrickAuraVFX);
+}
+
 void AEriCharacter::StartYoYoAttackVFX()
 {
 	if (!CurrentYoYoAttackVFX)
@@ -806,6 +867,11 @@ void AEriCharacter::TryAreaAttack()
 
 void AEriCharacter::TryHomingAttack()
 {
+	if (IsDead())
+	{
+		return;
+	}
+
 	if (!HomingAttackComponent || HomingAttackComponent->GetHomingState() != EHomingState::TargetFound)
 	{
 		return;
@@ -829,6 +895,11 @@ void AEriCharacter::TryHomingAttack()
 
 void AEriCharacter::EnterTrickMode()
 {
+	if (IsDead())
+	{
+		return;
+	}
+
 	if (CharacterStateComponent)
 	{
 		CharacterStateComponent->SetActionState(ECharacterActionState::Trick);

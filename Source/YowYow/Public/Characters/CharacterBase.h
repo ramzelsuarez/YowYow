@@ -57,6 +57,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Combat")
 	bool DoAttack(EAttackType AttackType = EAttackType::Normal);
 
+	UFUNCTION(BlueprintPure, Category = "Combat")
+	bool IsDead() const;
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Combat")
 	UCharacterAttackData* AttackData;
 
