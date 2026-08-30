@@ -63,6 +63,11 @@ void ASpinningRiotPlayerController::ToggleEnemyAI()
 
 void ASpinningRiotPlayerController::TogglePauseMenu()
 {
+	if (IsPossessedPawnDead())
+	{
+		return;
+	}
+
 	if (bPauseMenuOpen)
 	{
 		ClosePauseMenu();
@@ -73,8 +78,32 @@ void ASpinningRiotPlayerController::TogglePauseMenu()
 	}
 }
 
+void ASpinningRiotPlayerController::OpenPauseMenuOnDeath()
+{
+	if (bPauseMenuOpen)
+	{
+		return;
+	}
+
+	if (DeathPauseMenuDelay <= 0.f)
+	{
+		OpenPauseMenu();
+		return;
+	}
+
+	GetWorldTimerManager().SetTimer(
+		DeathPauseMenuTimerHandle,
+		this,
+		&ASpinningRiotPlayerController::OpenPauseMenu,
+		DeathPauseMenuDelay,
+		false
+	);
+}
+
 void ASpinningRiotPlayerController::OpenPauseMenu()
 {
+	GetWorldTimerManager().ClearTimer(DeathPauseMenuTimerHandle);
+
 	if (bPauseMenuOpen || !PauseMenuClass)
 	{
 		return;

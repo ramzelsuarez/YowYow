@@ -214,7 +214,7 @@ void ACharacterBase::HandleHealthDepleted(UHealthComponent* InHealthComponent, A
 		UEnemyAIComponent::SetGlobalAIFrozen(true);
 		if (ASpinningRiotPlayerController* PlayerController = Cast<ASpinningRiotPlayerController>(GetController()))
 		{
-			PlayerController->OpenPauseMenu();
+			PlayerController->OpenPauseMenuOnDeath();
 		}
 	}
 }

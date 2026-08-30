@@ -29,6 +29,9 @@ public:
 	void OpenPauseMenu();
 
 	UFUNCTION(BlueprintCallable, Category = "Pause")
+	void OpenPauseMenuOnDeath();
+
+	UFUNCTION(BlueprintCallable, Category = "Pause")
 	void ClosePauseMenu();
 
 	UFUNCTION(BlueprintPure, Category = "Pause")
@@ -50,6 +53,9 @@ protected:
 	UPROPERTY(EditAnywhere, Category = "Pause")
 	TSubclassOf<UUserWidget> PauseMenuClass;
 
+	UPROPERTY(EditAnywhere, Category = "Pause", meta = (ClampMin = "0.0"))
+	float DeathPauseMenuDelay = 1.25f;
+
 	UPROPERTY(EditAnywhere, Category = "Debug")
 	TObjectPtr<UInputAction> ToggleEnemyAIAction;
 
@@ -64,6 +70,8 @@ private:
 	TObjectPtr<UUserWidget> PauseMenuWidget;
 
 	bool bPauseMenuOpen = false;
+
+	FTimerHandle DeathPauseMenuTimerHandle;
 
 	bool IsPossessedPawnDead() const;
 };

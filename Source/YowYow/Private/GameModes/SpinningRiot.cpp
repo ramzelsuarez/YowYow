@@ -3,6 +3,7 @@
 
 #include "GameModes/SpinningRiot.h"
 
+#include "ActorComponents/EnemyAIComponent.h"
 #include "BattleSystem/WaveEnemyManager.h"
 #include "Kismet/GameplayStatics.h"
 #include "UObject/Class.h"
@@ -10,6 +11,9 @@
 void ASpinningRiot::BeginPlay()
 {
 	Super::BeginPlay();
+
+	// Static flag survives PIE stop/start; always start a match with AI on.
+	UEnemyAIComponent::SetGlobalAIFrozen(false);
 
 	WaveManager = Cast<AWaveEnemyManager>(
 		UGameplayStatics::GetActorOfClass(GetWorld(), AWaveEnemyManager::StaticClass())
