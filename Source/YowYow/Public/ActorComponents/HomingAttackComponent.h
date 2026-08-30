@@ -78,6 +78,7 @@ protected:
 	void SetCurrentTarget(AActor* NewTarget);
 	void ClearTarget();
 	void FinishHomingAttack();
+	void ApplyHomingHitDamage();
 	void ProcessRecoveryState();
 	void SetChargingSuspended(bool bSuspend);
 
@@ -92,6 +93,13 @@ protected:
 
 	UPROPERTY(EditAnywhere)
 	float HitDistance = 20.f;
+
+	/** Extra radius on top of HitDistance when applying homing damage. */
+	UPROPERTY(EditAnywhere, Category = "Homing|Damage", meta = (ClampMin = "0.0"))
+	float HitRadiusThreshold = 30.f;
+
+	UPROPERTY(EditAnywhere, Category = "Homing|Damage", meta = (ClampMin = "0.0"))
+	float HomingDamage = 1.f;
 
 	UPROPERTY(EditAnywhere)
 	float HitBounceSpeed = 2000.f;

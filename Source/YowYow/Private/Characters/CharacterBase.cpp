@@ -20,6 +20,10 @@ ACharacterBase::ACharacterBase()
 	GetCharacterMovement()->bOrientRotationToMovement = true;
 	GetCharacterMovement()->bUseControllerDesiredRotation = false;
 	GetCharacterMovement()->RotationRate = FRotator(0.f, 400.f, 0.f);
+
+	AttackComponent = CreateDefaultSubobject<UAttackComponent>(TEXT("AttackComponent"));
+	HealthComponent = CreateDefaultSubobject<UHealthComponent>(TEXT("HealthComponent"));
+	CharacterStateComponent = CreateDefaultSubobject<UCharacterStateComponent>(TEXT("CharacterStateComponent"));
 }
 
 void ACharacterBase::Tick(float DeltaTime)
@@ -31,24 +35,7 @@ void ACharacterBase::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// Components are added manually in BPs — never spawn them from C++ (avoids duplicates).
-	AttackComponent = FindComponentByClass<UAttackComponent>();
-	HealthComponent = FindComponentByClass<UHealthComponent>();
-	CharacterStateComponent = FindComponentByClass<UCharacterStateComponent>();
 	SpriteDirectionComponent = FindComponentByClass<USpriteDirectionComponent>();
-
-	if (!AttackComponent)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("%s missing UAttackComponent — add it on the Blueprint."), *GetName());
-	}
-	if (!HealthComponent)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("%s missing UHealthComponent — add it on the Blueprint."), *GetName());
-	}
-	if (!CharacterStateComponent)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("%s missing UCharacterStateComponent — add it on the Blueprint."), *GetName());
-	}
 
 	if (HealthComponent)
 	{
@@ -133,25 +120,24 @@ void ACharacterBase::DoMove(float Right, float Forward)
 	}
 }
 
-void ACharacterBase::DoAttack(EAttackType AttackType)
+bool ACharacterBase::DoAttack(EAttackType AttackType)
 {
 	if (!AttackComponent)
 	{
-		return;
+		return false;
 	}
 
 	if (HealthComponent && HealthComponent->IsDead())
 	{
-		return;
+		return false;
 	}
 
 	if (CharacterStateComponent && CharacterStateComponent->GetLifeState() == ECharacterLifeState::Dead)
 	{
-		return;
+		return false;
 	}
 
-	// AttackComponent owns attack/action states, facing lock, and recovery.
-	AttackComponent->TryAttack(AttackType);
+	return AttackComponent->TryAttack(AttackType);
 }
 
 void ACharacterBase::Jump()

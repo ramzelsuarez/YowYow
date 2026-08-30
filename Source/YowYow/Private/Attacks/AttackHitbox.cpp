@@ -23,6 +23,10 @@ AAttackHitbox::AAttackHitbox()
 	SetRootComponent(SceneRoot);
 
 	SetActorEnableCollision(false);
+
+#if !WITH_EDITOR
+	bDrawDebug = false;
+#endif
 }
 
 void AAttackHitbox::Initialize(

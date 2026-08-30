@@ -33,7 +33,7 @@ public:
 	FAttackHitboxFinished OnFinished;
 
 	UPROPERTY(EditAnywhere, Category = "Debug")
-	bool bDrawDebug = false;
+	bool bDrawDebug = true;
 
 protected:
 	virtual void Tick(float DeltaTime) override;

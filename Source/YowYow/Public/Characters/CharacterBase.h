@@ -19,9 +19,8 @@ class UCameraShakeBase;
 /**
  * this class is the base for all characters in the game, it should implement the following components: (besides obvious movement component etc)
  * - UPaperZDAnimationComponent: self explanatory and needed for all APaperZDCharacter children
- * - UHealthComponent: self explanatory / avoid if we have npcs (not sure if we will have them, but those don't engage in combat  and that would make this base character even simpler)
- * - UAttackComponent: self explanatory / avoid if we have npcs (not sure if we will have them, but those don't attack and that would make this base character even simpler)
- *   All gameplay components (Attack/Health/State/etc) must be added on the Blueprint — C++ only finds them.
+ * - UHealthComponent / UAttackComponent / UCharacterStateComponent: created in C++ on this class.
+ *   Do not add extra copies on the Blueprint (duplicates).
  * - USpriteDirectionComponent: component that will cache the player's camera, get its direction, compare it to this character's forward
  *		and generate sprite directionality based on it. The PaperZD ABP should consume from it to display the correct sprite
  * - UCharacterStateComponent: it dictates general states that will help us determine if certain actions can be performed at certain points
@@ -56,7 +55,7 @@ public:
 	 */
 	// default attack is normal since it's the most common usage and the only one enemies will use (probably)
 	UFUNCTION(BlueprintCallable, Category="Combat")
-	void DoAttack(EAttackType AttackType = EAttackType::Normal);
+	bool DoAttack(EAttackType AttackType = EAttackType::Normal);
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Combat")
 	UCharacterAttackData* AttackData;

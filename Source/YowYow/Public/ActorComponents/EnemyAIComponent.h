@@ -27,7 +27,7 @@ private:
 	float DetectionRange = 700.f;
 
 	UPROPERTY(EditAnywhere, Category = "Enemy AI")
-	float AttackRange = 130.f;
+	float AttackRange = 180.f;
 
 	UPROPERTY(EditAnywhere, Category = "Enemy AI")
 	float MoveSpeed = 250.f;
@@ -60,9 +60,11 @@ private:
 	FTimerHandle AttackTokenReleaseTimerHandle;
 
 	float LastAttackTime = -999.f;
+	bool bLoggedMissingAttackSetup = false;
 
 	void UpdateAI(float DeltaTime);
 	bool CanAct() const;
 	bool CanAttack() const;
+	void FacePlayer();
 	void ReleaseAttackToken();
 };

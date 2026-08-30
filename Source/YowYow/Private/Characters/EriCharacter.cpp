@@ -459,6 +459,9 @@ void AEriCharacter::BeginHomingYoyoCharge()
 	{
 		YoYoCurrentSpeed = HomingAttackComponent->GetHomingSpeed();
 	}
+
+	CurrentYoYoAttackVFX = NormalAttackVFXSystem;
+	StartYoYoAttackVFX();
 }
 
 void AEriCharacter::UpdateHomingYoyos(float DeltaTime)

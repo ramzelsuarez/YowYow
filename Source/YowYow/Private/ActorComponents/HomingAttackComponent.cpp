@@ -8,6 +8,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PawnMovementComponent.h"
 #include "Interfaces/Homingable.h"
+#include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetSystemLibrary.h"
 #include "TimerManager.h"
 #include "Engine/World.h"
@@ -160,12 +161,43 @@ void UHomingAttackComponent::ClearTarget()
 	SetCurrentTarget(nullptr);
 }
 
+void UHomingAttackComponent::ApplyHomingHitDamage()
+{
+	if (!IsValid(CurrentTarget) || !OwnerCharacter)
+	{
+		return;
+	}
+
+	FVector TargetLocation = CurrentTarget->GetActorLocation();
+	if (CurrentTarget->Implements<UHomingable>())
+	{
+		TargetLocation = IHomingable::Execute_GetTargetLocation(CurrentTarget);
+	}
+
+	const float HitRadius = HitDistance + HitRadiusThreshold;
+	if (FVector::DistSquared(OwnerCharacter->GetActorLocation(), TargetLocation) > FMath::Square(HitRadius))
+	{
+		return;
+	}
+
+	AController* InstigatorController = OwnerCharacter->GetController();
+	UGameplayStatics::ApplyDamage(
+		CurrentTarget,
+		HomingDamage,
+		InstigatorController,
+		OwnerCharacter,
+		nullptr
+	);
+}
+
 void UHomingAttackComponent::FinishHomingAttack()
 {
 	if (!OwnerCharacter)
 	{
 		return;
 	}
+
+	ApplyHomingHitDamage();
 
 	const FVector Direction = FVector(0, 0, HitBounceSpeed);
 	OwnerCharacter->LaunchCharacter(Direction, false, true);
