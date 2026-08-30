@@ -11,21 +11,21 @@ class UCharacterStateComponent;
 class ACharacterBase;
 class UPawnMovementComponent;
 
+/** Consumed by AEriCharacter (camera unlock + action/locomotion after bounce or cancel). */
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(
 	FOnHomingAttackFinished,
 	bool, bSuccess
 );
 
 /**
- * This component should handle the homing attack functionality, state, etc
+ * Homing attack: search while airborne, dash to target, bounce on hit.
  */
-UCLASS(ClassGroup=(Custom), meta=(BlueprintSpawnableComponent))
+UCLASS(ClassGroup = (Custom), meta = (BlueprintSpawnableComponent))
 class YOWYOW_API UHomingAttackComponent : public UActorComponent
 {
 	GENERATED_BODY()
 
 public:
-	// Sets default values for this component's properties
 	UHomingAttackComponent();
 
 	UFUNCTION(BlueprintCallable)
@@ -37,11 +37,30 @@ public:
 	UFUNCTION(BlueprintCallable)
 	void DoHomingAttack();
 
+	/** Charging yoyos reached the target — Eri starts the dash. */
+	UFUNCTION(BlueprintCallable)
+	void BeginLaunch();
+
+	/** Abort in-flight homing (grounded, lost target, etc.). Broadcasts finished(false). */
+	UFUNCTION(BlueprintCallable)
+	void CancelHomingAttack();
+
+	UFUNCTION(BlueprintPure, Category = "Homing")
+	AActor* GetCurrentHomingTarget() const { return CurrentTarget; }
+
+	UFUNCTION(BlueprintPure, Category = "Homing")
+	bool IsHomingInFlight() const;
+
+	UFUNCTION(BlueprintPure, Category = "Homing")
+	float GetHitDistance() const { return HitDistance; }
+
+	UFUNCTION(BlueprintPure, Category = "Homing")
+	float GetHomingSpeed() const { return InitialHomingSpeed; }
+
 	UPROPERTY(BlueprintAssignable)
 	FOnHomingAttackFinished OnHomingAttackFinished;
 
 protected:
-	// Called when the game starts
 	virtual void BeginPlay() override;
 
 	UPROPERTY()
@@ -54,23 +73,18 @@ protected:
 	UPawnMovementComponent* OwnerMovementComponent;
 
 	void FindTargets(TArray<AActor*>& OutTargets);
-	
 	bool GetBestTarget();
-
 	void UpdateHomingAttack();
-
 	void SetCurrentTarget(AActor* NewTarget);
-
 	void ClearTarget();
-
 	void FinishHomingAttack();
-
+	void ApplyHomingHitDamage();
 	void ProcessRecoveryState();
+	void SetChargingSuspended(bool bSuspend);
 
 	UPROPERTY()
 	AActor* CurrentTarget = nullptr;
 
-	// un-uproperty following four vars, only added for iteration
 	UPROPERTY(EditAnywhere)
 	float SearchRadius = 1200.f;
 
@@ -80,13 +94,19 @@ protected:
 	UPROPERTY(EditAnywhere)
 	float HitDistance = 20.f;
 
+	/** Extra radius on top of HitDistance when applying homing damage. */
+	UPROPERTY(EditAnywhere, Category = "Homing|Damage", meta = (ClampMin = "0.0"))
+	float HitRadiusThreshold = 30.f;
+
+	UPROPERTY(EditAnywhere, Category = "Homing|Damage", meta = (ClampMin = "0.0"))
+	float HomingDamage = 1.f;
+
 	UPROPERTY(EditAnywhere)
 	float HitBounceSpeed = 2000.f;
 
 	UPROPERTY(EditAnywhere)
 	float HomingCooldown = 2.f;
 
-	// I don't think this needs to be editable anywhere
 	TArray<TEnumAsByte<EObjectTypeQuery>> TargetObjectType = {
 		UEngineTypes::ConvertToObjectType(ECC_WorldDynamic),
 		UEngineTypes::ConvertToObjectType(ECC_WorldStatic),
@@ -95,11 +115,11 @@ protected:
 
 private:
 	EHomingState HomingState = EHomingState::Idle;
-
 	FTimerHandle HomingCooldownTimer;
+	float CachedGravityScale = 1.f;
+	bool bChargingSuspended = false;
 
 public:
-	// Called every frame
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType,
 	                           FActorComponentTickFunction* ThisTickFunction) override;
 };

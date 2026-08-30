@@ -5,13 +5,14 @@
 
 #include "ActorComponents/CharacterStateComponent.h"
 #include "Characters/CharacterBase.h"
+#include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PawnMovementComponent.h"
 #include "Interfaces/Homingable.h"
+#include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetSystemLibrary.h"
 #include "TimerManager.h"
 #include "Engine/World.h"
 
-// Sets default values for this component's properties
 UHomingAttackComponent::UHomingAttackComponent()
 {
 	PrimaryComponentTick.bCanEverTick = true;
@@ -31,22 +32,91 @@ bool UHomingAttackComponent::CanSearchTargets()
 			HomingState == EHomingState::TargetFound);
 }
 
+bool UHomingAttackComponent::IsHomingInFlight() const
+{
+	return HomingState == EHomingState::Charging
+		|| HomingState == EHomingState::Launching
+		|| HomingState == EHomingState::Hit;
+}
+
 void UHomingAttackComponent::DoHomingAttack()
 {
-	if (IsValid(CurrentTarget))
+	if (!IsValid(CurrentTarget) || !OwnerCharacter)
 	{
-		HomingState = EHomingState::Launching;
-
-		const FVector TargetLocation = IHomingable::Execute_GetTargetLocation(CurrentTarget);
-		const FVector Direction = (TargetLocation - OwnerCharacter->GetActorLocation()).GetSafeNormal();
-
-		OwnerCharacter->LaunchCharacter(Direction * InitialHomingSpeed, true, true);
+		return;
 	}
+
+	HomingState = EHomingState::Charging;
+	SetChargingSuspended(true);
+}
+
+void UHomingAttackComponent::BeginLaunch()
+{
+	if (HomingState != EHomingState::Charging || !IsValid(CurrentTarget) || !OwnerCharacter)
+	{
+		return;
+	}
+
+	SetChargingSuspended(false);
+	HomingState = EHomingState::Launching;
+
+	const FVector TargetLocation = IHomingable::Execute_GetTargetLocation(CurrentTarget);
+	const FVector Direction = (TargetLocation - OwnerCharacter->GetActorLocation()).GetSafeNormal();
+	OwnerCharacter->LaunchCharacter(Direction * InitialHomingSpeed, true, true);
+}
+
+void UHomingAttackComponent::SetChargingSuspended(bool bSuspend)
+{
+	UCharacterMovementComponent* Movement = Cast<UCharacterMovementComponent>(OwnerMovementComponent);
+	if (!Movement)
+	{
+		return;
+	}
+
+	if (bSuspend)
+	{
+		if (!bChargingSuspended)
+		{
+			CachedGravityScale = Movement->GravityScale;
+		}
+		bChargingSuspended = true;
+		Movement->GravityScale = 0.f;
+		Movement->StopMovementImmediately();
+		Movement->Velocity = FVector::ZeroVector;
+		return;
+	}
+
+	if (!bChargingSuspended)
+	{
+		return;
+	}
+
+	Movement->GravityScale = CachedGravityScale;
+	bChargingSuspended = false;
+}
+
+void UHomingAttackComponent::CancelHomingAttack()
+{
+	if (!IsHomingInFlight() && HomingState != EHomingState::Charging)
+	{
+		// Still clear soft lock state if needed
+		if (HomingState != EHomingState::Recovery)
+		{
+			ClearTarget();
+			HomingState = EHomingState::Idle;
+		}
+		return;
+	}
+
+	SetChargingSuspended(false);
+	ClearTarget();
+	HomingState = EHomingState::Idle;
+	OnHomingAttackFinished.Broadcast(false);
 }
 
 void UHomingAttackComponent::UpdateHomingAttack()
 {
-	if (IsValid(CurrentTarget))
+	if (IsValid(CurrentTarget) && OwnerCharacter && OwnerMovementComponent)
 	{
 		const FVector TargetLocation = IHomingable::Execute_GetTargetLocation(CurrentTarget);
 		const FVector Direction = (TargetLocation - OwnerCharacter->GetActorLocation()).GetSafeNormal();
@@ -62,8 +132,8 @@ void UHomingAttackComponent::UpdateHomingAttack()
 		return;
 	}
 
-	ClearTarget();
-	HomingState = EHomingState::Idle;
+	// Lost target mid-flight
+	CancelHomingAttack();
 }
 
 void UHomingAttackComponent::SetCurrentTarget(AActor* NewTarget)
@@ -91,23 +161,62 @@ void UHomingAttackComponent::ClearTarget()
 	SetCurrentTarget(nullptr);
 }
 
+void UHomingAttackComponent::ApplyHomingHitDamage()
+{
+	if (!IsValid(CurrentTarget) || !OwnerCharacter)
+	{
+		return;
+	}
+
+	FVector TargetLocation = CurrentTarget->GetActorLocation();
+	if (CurrentTarget->Implements<UHomingable>())
+	{
+		TargetLocation = IHomingable::Execute_GetTargetLocation(CurrentTarget);
+	}
+
+	const float HitRadius = HitDistance + HitRadiusThreshold;
+	if (FVector::DistSquared(OwnerCharacter->GetActorLocation(), TargetLocation) > FMath::Square(HitRadius))
+	{
+		return;
+	}
+
+	AController* InstigatorController = OwnerCharacter->GetController();
+	UGameplayStatics::ApplyDamage(
+		CurrentTarget,
+		HomingDamage,
+		InstigatorController,
+		OwnerCharacter,
+		nullptr
+	);
+}
+
 void UHomingAttackComponent::FinishHomingAttack()
 {
-	FVector const Direction = FVector(0, 0, HitBounceSpeed);
+	if (!OwnerCharacter)
+	{
+		return;
+	}
 
+	ApplyHomingHitDamage();
+
+	const FVector Direction = FVector(0, 0, HitBounceSpeed);
 	OwnerCharacter->LaunchCharacter(Direction, false, true);
 
 	HomingState = EHomingState::Recovery;
 	ClearTarget();
+	// Bounce: unlock camera / free look (Eri listens).
 	OnHomingAttackFinished.Broadcast(true);
 
-	GetWorld()->GetTimerManager().SetTimer(
-		HomingCooldownTimer,
-		this,
-		&UHomingAttackComponent::ProcessRecoveryState,
-		HomingCooldown,
-		false
-	);
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().SetTimer(
+			HomingCooldownTimer,
+			this,
+			&UHomingAttackComponent::ProcessRecoveryState,
+			HomingCooldown,
+			false
+		);
+	}
 }
 
 void UHomingAttackComponent::ProcessRecoveryState()
@@ -128,7 +237,6 @@ void UHomingAttackComponent::BeginPlay()
 	}
 
 	OwnerStateComponent = OwnerCharacter->GetComponentByClass<UCharacterStateComponent>();
-
 	OwnerMovementComponent = OwnerCharacter->GetMovementComponent();
 }
 
@@ -148,7 +256,10 @@ void UHomingAttackComponent::FindTargets(TArray<AActor*>& OutTargets)
 
 	for (AActor* Actor : Overlaps)
 	{
-		if (!Actor) continue;
+		if (!Actor)
+		{
+			continue;
+		}
 
 		if (Actor->Implements<UHomingable>())
 		{
@@ -196,27 +307,25 @@ bool UHomingAttackComponent::GetBestTarget()
 	{
 		FVector TargetLocation = Target->GetActorLocation();
 
-
 		if (Target->Implements<UHomingable>())
 		{
 			TargetLocation = IHomingable::Execute_GetTargetLocation(Target);
 		}
 
 		FVector2D ScreenPos;
-		const bool bOnScreen =
-			PC->ProjectWorldLocationToScreen(TargetLocation, ScreenPos);
-
+		const bool bOnScreen = PC->ProjectWorldLocationToScreen(TargetLocation, ScreenPos);
 		if (!bOnScreen)
+		{
 			continue;
+		}
 
-		// avoid extreme borders (probably fine though)
 		if (ScreenPos.X < 0.f || ScreenPos.Y < 0.f ||
 			ScreenPos.X > ViewportX || ScreenPos.Y > ViewportY)
+		{
 			continue;
+		}
 
-		const float DistSq =
-			FVector2D::DistSquared(ScreenPos, ScreenCenter);
-
+		const float DistSq = FVector2D::DistSquared(ScreenPos, ScreenCenter);
 		if (DistSq < BestDistSq)
 		{
 			BestDistSq = DistSq;
@@ -250,8 +359,15 @@ void UHomingAttackComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 
 	if (!bCanHomingExist)
 	{
-		HomingState = EHomingState::Idle;
-		ClearTarget();
+		if (IsHomingInFlight() || HomingState == EHomingState::Charging)
+		{
+			CancelHomingAttack();
+		}
+		else if (HomingState != EHomingState::Recovery)
+		{
+			HomingState = EHomingState::Idle;
+			ClearTarget();
+		}
 		return;
 	}
 
@@ -260,8 +376,18 @@ void UHomingAttackComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 	case EHomingState::Idle:
 	case EHomingState::Searching:
 	case EHomingState::TargetFound:
-		HomingState = EHomingState::Searching;
 		HomingState = GetBestTarget() ? EHomingState::TargetFound : EHomingState::Searching;
+		break;
+
+	case EHomingState::Charging:
+		if (UCharacterMovementComponent* Movement = Cast<UCharacterMovementComponent>(OwnerMovementComponent))
+		{
+			Movement->Velocity = FVector::ZeroVector;
+		}
+		if (!IsValid(CurrentTarget))
+		{
+			CancelHomingAttack();
+		}
 		break;
 
 	case EHomingState::Launching:

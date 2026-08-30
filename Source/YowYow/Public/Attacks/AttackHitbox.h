@@ -1,0 +1,77 @@
+#pragma once
+
+#include "CoreMinimal.h"
+#include "GameFramework/Actor.h"
+#include "Types/AttackTypes.h"
+#include "AttackHitbox.generated.h"
+
+/** Consumed by UAttackComponent (attack lifecycle / combo). */
+DECLARE_MULTICAST_DELEGATE_OneParam(FAttackHitboxFinished, class AAttackHitbox*);
+
+class USceneComponent;
+
+UCLASS(NotBlueprintable)
+class YOWYOW_API AAttackHitbox : public AActor
+{
+	GENERATED_BODY()
+
+public:
+	AAttackHitbox();
+
+	/**
+	 * @param InAttachedSource Required when AttackData.Motion == FollowSource.
+	 * @param InOrbitSideSign OrbitCircle only: +1 = left crescent (back→left→front),
+	 *        -1 = right crescent (back→right→front). Ignored for other motions.
+	 */
+	void Initialize(
+		AActor* InSourceActor,
+		const FAttackData& InAttackData,
+		USceneComponent* InAttachedSource = nullptr,
+		float InOrbitSideSign = -1.f
+	);
+
+	FAttackHitboxFinished OnFinished;
+
+	UPROPERTY(EditAnywhere, Category = "Debug")
+	bool bDrawDebug = true;
+
+protected:
+	virtual void Tick(float DeltaTime) override;
+
+private:
+	void TickFollowSource(float DeltaTime);
+	void TickArcSweep(float DeltaTime);
+	void TickOrbitCircle(float DeltaTime);
+	FVector GetSourceLocation() const;
+	void MoveAndTrace(const FVector& NewLocation, bool bShouldTrace);
+	void TraceHits(const FVector& Start, const FVector& End);
+	void HandleHit(AActor* HitActor);
+	void FinishAttack();
+	void DrawDebugAt(const FVector& Location, const FVector& PreviousLocation, bool bShouldTrace) const;
+
+	UPROPERTY()
+	USceneComponent* SceneRoot = nullptr;
+
+	TWeakObjectPtr<AActor> SourceActor;
+	TWeakObjectPtr<USceneComponent> AttachedSource;
+	FAttackData AttackData;
+	EAttackMotion Motion = EAttackMotion::ArcSweep;
+	FVector AttackForward = FVector::ForwardVector;
+	FVector AttackRight = FVector::RightVector;
+	FVector ArcCenter = FVector::ZeroVector;
+	TSet<TWeakObjectPtr<AActor>> HitActors;
+
+	float HitboxRadius = 32.f;
+	float CurrentArcAngle = 90.f;
+	float OrbitAngleDegrees = 0.f;
+	/** Degrees traveled on this crescent (finish at 180 — back to front once). */
+	float OrbitTravelDegrees = 0.f;
+	/** +1 left medialuna, -1 right medialuna. */
+	float OrbitSideSign = -1.f;
+	float ElapsedTime = 0.f;
+	float Duration = 0.f;
+	/** Peak projection along AttackForward — used to detect the yoyo starting its return. */
+	float PeakAlongForward = 0.f;
+	bool bOutboundArmed = false;
+	bool bFinished = false;
+};
