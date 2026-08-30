@@ -8,6 +8,8 @@
 
 class UEnhancedInputLocalPlayerSubsystem;
 class UInputMappingContext;
+class UInputAction;
+class UUserWidget;
 
 /**
  * 
@@ -19,6 +21,18 @@ class YOWYOW_API ASpinningRiotPlayerController : public APlayerController
 public:
 	void EnterTrickMode() const;
 	void ExitTrickMode() const;
+
+	UFUNCTION(BlueprintCallable, Category = "Pause")
+	void TogglePauseMenu();
+
+	UFUNCTION(BlueprintCallable, Category = "Pause")
+	void OpenPauseMenu();
+
+	UFUNCTION(BlueprintCallable, Category = "Pause")
+	void ClosePauseMenu();
+
+	UFUNCTION(BlueprintPure, Category = "Pause")
+	bool IsPauseMenuOpen() const { return bPauseMenuOpen; }
 	
 protected:
 	UPROPERTY(EditAnywhere, Category="Input contexts")
@@ -27,9 +41,21 @@ protected:
 	UPROPERTY(EditAnywhere, Category="Input contexts")
 	UInputMappingContext* TrickModeIMC = nullptr;
 
+	UPROPERTY(EditAnywhere, Category = "Pause")
+	TObjectPtr<UInputAction> PauseAction;
+
+	UPROPERTY(EditAnywhere, Category = "Pause")
+	TSubclassOf<UUserWidget> PauseMenuClass;
+
 	virtual void BeginPlay() override;
+	virtual void SetupInputComponent() override;
 
 private:
 	UPROPERTY()
 	UEnhancedInputLocalPlayerSubsystem* Subsystem = nullptr;
+
+	UPROPERTY()
+	TObjectPtr<UUserWidget> PauseMenuWidget;
+
+	bool bPauseMenuOpen = false;
 };
