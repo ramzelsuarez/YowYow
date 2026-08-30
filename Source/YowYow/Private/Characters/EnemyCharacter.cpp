@@ -7,6 +7,7 @@
 #include "ActorComponents/HealthComponent.h"
 #include "BattleSystem/WaveEnemyManager.h"
 #include "CharacterStates/CharacterStates.h"
+#include "Items/HealthItem.h"
 #include "Kismet/GameplayStatics.h"
 #include "TimerManager.h"
 
@@ -79,6 +80,8 @@ void AEnemyCharacter::HandleEnemyHealthDepleted(UHealthComponent* InHealthCompon
 		WaveManager->RegisterEnemyDefeated(this);
 	}
 
+	TryDropHealthItem();
+
 	UWorld* World = GetWorld();
 	if (!World)
 	{
@@ -98,6 +101,30 @@ void AEnemyCharacter::HandleEnemyHealthDepleted(UHealthComponent* InHealthCompon
 		&AEnemyCharacter::DestroyCorpse,
 		CorpseLifetime,
 		false
+	);
+}
+
+void AEnemyCharacter::TryDropHealthItem()
+{
+	if (!HealthItemClass || HealthDropChance <= 0.f)
+	{
+		return;
+	}
+
+	UWorld* World = GetWorld();
+	if (!World || FMath::FRand() >= HealthDropChance)
+	{
+		return;
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+	World->SpawnActor<AHealthItem>(
+		HealthItemClass,
+		GetActorLocation() + HealthDropOffset,
+		GetActorRotation(),
+		SpawnParams
 	);
 }
 

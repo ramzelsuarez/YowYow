@@ -3,10 +3,10 @@
 #include "CoreMinimal.h"
 #include "Containers/Set.h"
 #include "GameFramework/Actor.h"
+#include "Characters/EnemyCharacter.h"
 #include "WaveEnemyManager.generated.h"
 
 class AActor;
-class AEnemyCharacter;
 class AEnemySpawnPoint;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnEncounterCompleted);
@@ -16,7 +16,7 @@ struct FEnemyWaveEntry
 {
 	GENERATED_BODY()
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Encounter")
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Encounter", meta = (AllowAbstract = "false"))
 	TSubclassOf<AEnemyCharacter> EnemyClass;
 
 	/** 0..n into SpawnPoints, or -1 to pick automatically (unused path, not closest to player). */
@@ -76,7 +76,7 @@ protected:
 	float EncounterStartDelay = 1.f;
 
 	/** Used when a wave entry has no class set. */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Encounter")
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Encounter", meta = (AllowAbstract = "false"))
 	TSubclassOf<AEnemyCharacter> DefaultEnemyClass;
 
 	UPROPERTY(EditInstanceOnly, BlueprintReadOnly, Category = "Encounter")
@@ -110,6 +110,7 @@ private:
 	void AdvanceWave();
 	void SpawnCurrentWave();
 	void CompleteEncounter();
+	void CollectSpawnPointsIfNeeded();
 
 	TSubclassOf<AEnemyCharacter> ResolveEnemyClass(const FEnemyWaveEntry& Entry) const;
 	AEnemySpawnPoint* PickSpawnPoint(int32 RequestedIndex, TSet<int32>& UsedThisWave) const;

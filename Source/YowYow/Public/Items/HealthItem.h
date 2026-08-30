@@ -4,7 +4,6 @@
 
 #include "CoreMinimal.h"
 #include "Items/ItemBase.h"
-#include "Components/SphereComponent.h"
 #include "HealthItem.generated.h"
 
 UCLASS()
@@ -14,8 +13,8 @@ class YOWYOW_API AHealthItem : public AItemBase
 protected:
 	virtual void OnSphereOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult) override;
 private:
-	UPROPERTY(EditAnywhere, Category = Items)
-	int32 Health;
+	UPROPERTY(EditAnywhere, Category = "Items", meta = (ClampMin = "1"))
+	int32 Health = 1;
 public:
 	FORCEINLINE int32 GetHealth() const { return Health;  }
 };

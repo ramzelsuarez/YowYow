@@ -7,9 +7,27 @@
 #include "BattleSystem/WaveEnemyManager.h"
 #include "TimerManager.h"
 
+bool UEnemyAIComponent::bGlobalAIFrozen = false;
+
 UEnemyAIComponent::UEnemyAIComponent()
 {
 	PrimaryComponentTick.bCanEverTick = true;
+}
+
+void UEnemyAIComponent::SetGlobalAIFrozen(bool bFrozen)
+{
+	if (bGlobalAIFrozen == bFrozen)
+	{
+		return;
+	}
+
+	bGlobalAIFrozen = bFrozen;
+	UE_LOG(LogTemp, Warning, TEXT("Enemy AI %s"), bGlobalAIFrozen ? TEXT("FROZEN") : TEXT("RUNNING"));
+}
+
+void UEnemyAIComponent::ToggleGlobalAIFrozen()
+{
+	SetGlobalAIFrozen(!bGlobalAIFrozen);
 }
 
 void UEnemyAIComponent::BeginPlay()
@@ -35,6 +53,11 @@ void UEnemyAIComponent::BeginPlay()
 void UEnemyAIComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+
+	if (bGlobalAIFrozen)
+	{
+		return;
+	}
 
 	UpdateAI(DeltaTime);
 }

@@ -3,9 +3,11 @@
 
 #include "Characters/CharacterBase.h"
 #include "ActorComponents/AttackComponent.h"
+#include "ActorComponents/EnemyAIComponent.h"
 #include "ActorComponents/HealthComponent.h"
 #include "ActorComponents/SpriteDirectionComponent.h"
 #include "CameraManagers/SpinningRiotCameraManager.h"
+#include "PlayerControllers/SpinningRiotPlayerController.h"
 #include "Kismet/GameplayStatics.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
@@ -205,6 +207,15 @@ void ACharacterBase::HandleHealthDepleted(UHealthComponent* InHealthComponent, A
 		CharacterStateComponent->SetLifeState(ECharacterLifeState::Dead);
 		CharacterStateComponent->SetAttackState(ECharacterAttackState::None);
 		CharacterStateComponent->SetActionState(ECharacterActionState::Default);
+	}
+
+	if (IsPlayerControlled())
+	{
+		UEnemyAIComponent::SetGlobalAIFrozen(true);
+		if (ASpinningRiotPlayerController* PlayerController = Cast<ASpinningRiotPlayerController>(GetController()))
+		{
+			PlayerController->OpenPauseMenu();
+		}
 	}
 }
 

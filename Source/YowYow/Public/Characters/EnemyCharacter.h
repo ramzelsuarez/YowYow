@@ -9,6 +9,7 @@
 
 class AWaveEnemyManager;
 class UHealthComponent;
+class AHealthItem;
 
 /**
  * Self explanatory class for all enemies (we will figure out later if a ABossCharacter inheriting from this one is really necessary)
@@ -16,7 +17,7 @@ class UHealthComponent;
  * - AI Controller: self explanatory, altho the logic would live here
  * - Attacks/drops/etc should live within this class and consume a DataAsset to handle enemy-specific behavior
  */
-UCLASS()
+UCLASS(Blueprintable)
 class YOWYOW_API AEnemyCharacter : public ACharacterBase, public IHomingable
 {
 	GENERATED_BODY()
@@ -34,6 +35,16 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Encounter", meta = (ClampMin = "0.0"))
 	float CorpseLifetime = 1.2f;
 
+	/** Assign BP_HealthItem. Empty = no drop. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Drops")
+	TSubclassOf<AHealthItem> HealthItemClass;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Drops", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float HealthDropChance = 0.25f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Drops")
+	FVector HealthDropOffset = FVector(0.f, 0.f, 50.f);
+
 private:
 	bool bIsHomingTargeted = false;
 
@@ -45,5 +56,6 @@ private:
 	UFUNCTION()
 	void HandleEnemyHealthDepleted(UHealthComponent* InHealthComponent, AActor* DamageCauser);
 
+	void TryDropHealthItem();
 	void DestroyCorpse();
 };

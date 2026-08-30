@@ -3,6 +3,8 @@
 
 #include "PlayerControllers/SpinningRiotPlayerController.h"
 
+#include "ActorComponents/EnemyAIComponent.h"
+#include "ActorComponents/HealthComponent.h"
 #include "Blueprint/UserWidget.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
@@ -12,10 +14,21 @@ void ASpinningRiotPlayerController::BeginPlay()
 {
 	Super::BeginPlay();
 
-	if (!IsLocalPlayerController() || !GameplayIMC) return;
+	if (!IsLocalPlayerController())
+	{
+		return;
+	}
+
+	// Title_test leaves UIOnly + cursor on the viewport; OpenLevel does not clear it.
+	bShowMouseCursor = false;
+	SetInputMode(FInputModeGameOnly());
+
+	if (!GameplayIMC)
+	{
+		return;
+	}
 
 	Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(GetLocalPlayer());
-
 	if (Subsystem)
 	{
 		Subsystem->AddMappingContext(GameplayIMC, 0);
@@ -27,12 +40,25 @@ void ASpinningRiotPlayerController::SetupInputComponent()
 	Super::SetupInputComponent();
 
 	UEnhancedInputComponent* EnhancedInput = Cast<UEnhancedInputComponent>(InputComponent);
-	if (!EnhancedInput || !PauseAction)
+	if (!EnhancedInput)
 	{
 		return;
 	}
 
-	EnhancedInput->BindAction(PauseAction, ETriggerEvent::Started, this, &ASpinningRiotPlayerController::TogglePauseMenu);
+	if (PauseAction)
+	{
+		EnhancedInput->BindAction(PauseAction, ETriggerEvent::Started, this, &ASpinningRiotPlayerController::TogglePauseMenu);
+	}
+
+	if (ToggleEnemyAIAction)
+	{
+		EnhancedInput->BindAction(ToggleEnemyAIAction, ETriggerEvent::Started, this, &ASpinningRiotPlayerController::ToggleEnemyAI);
+	}
+}
+
+void ASpinningRiotPlayerController::ToggleEnemyAI()
+{
+	UEnemyAIComponent::ToggleGlobalAIFrozen();
 }
 
 void ASpinningRiotPlayerController::TogglePauseMenu()
@@ -73,6 +99,11 @@ void ASpinningRiotPlayerController::OpenPauseMenu()
 
 void ASpinningRiotPlayerController::ClosePauseMenu()
 {
+	if (IsPossessedPawnDead())
+	{
+		return;
+	}
+
 	if (PauseMenuWidget)
 	{
 		PauseMenuWidget->RemoveFromParent();
@@ -83,6 +114,18 @@ void ASpinningRiotPlayerController::ClosePauseMenu()
 	SetPause(false);
 	bShowMouseCursor = false;
 	SetInputMode(FInputModeGameOnly());
+}
+
+bool ASpinningRiotPlayerController::IsPossessedPawnDead() const
+{
+	const APawn* ControlledPawn = GetPawn();
+	if (!ControlledPawn)
+	{
+		return false;
+	}
+
+	const UHealthComponent* Health = ControlledPawn->FindComponentByClass<UHealthComponent>();
+	return Health && Health->IsDead();
 }
 
 void ASpinningRiotPlayerController::EnterTrickMode() const

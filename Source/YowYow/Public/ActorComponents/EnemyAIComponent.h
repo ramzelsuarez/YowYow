@@ -16,6 +16,15 @@ class YOWYOW_API UEnemyAIComponent : public UActorComponent
 public:
 	UEnemyAIComponent();
 
+	UFUNCTION(BlueprintCallable, Category = "Enemy AI|Debug")
+	static void SetGlobalAIFrozen(bool bFrozen);
+
+	UFUNCTION(BlueprintCallable, Category = "Enemy AI|Debug")
+	static void ToggleGlobalAIFrozen();
+
+	UFUNCTION(BlueprintPure, Category = "Enemy AI|Debug")
+	static bool IsGlobalAIFrozen() { return bGlobalAIFrozen; }
+
 protected:
 	virtual void BeginPlay() override;
 
@@ -61,6 +70,8 @@ private:
 
 	float LastAttackTime = -999.f;
 	bool bLoggedMissingAttackSetup = false;
+
+	static bool bGlobalAIFrozen;
 
 	void UpdateAI(float DeltaTime);
 	bool CanAct() const;

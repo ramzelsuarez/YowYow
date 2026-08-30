@@ -118,6 +118,8 @@ void AWaveEnemyManager::StartEncounter()
 		return;
 	}
 
+	CollectSpawnPointsIfNeeded();
+
 	bEncounterStarted = true;
 	CurrentWaveIndex = -1;
 
@@ -214,6 +216,37 @@ void AWaveEnemyManager::CompleteEncounter()
 
 	UE_LOG(LogTemp, Warning, TEXT("Encounter complete."));
 	OnEncounterCompleted.Broadcast();
+}
+
+void AWaveEnemyManager::CollectSpawnPointsIfNeeded()
+{
+	for (const TObjectPtr<AEnemySpawnPoint>& Point : SpawnPoints)
+	{
+		if (Point)
+		{
+			return;
+		}
+	}
+
+	TArray<AActor*> Found;
+	UGameplayStatics::GetAllActorsOfClass(this, AEnemySpawnPoint::StaticClass(), Found);
+
+	SpawnPoints.Reset();
+	for (AActor* Actor : Found)
+	{
+		if (AEnemySpawnPoint* Point = Cast<AEnemySpawnPoint>(Actor))
+		{
+			SpawnPoints.Add(Point);
+		}
+	}
+
+	UE_LOG(
+		LogTemp,
+		Warning,
+		TEXT("%s SpawnPoints was empty — auto-collected %d AEnemySpawnPoint actor(s). Assign them on the instance to control order."),
+		*GetName(),
+		SpawnPoints.Num()
+	);
 }
 
 TSubclassOf<AEnemyCharacter> AWaveEnemyManager::ResolveEnemyClass(const FEnemyWaveEntry& Entry) const

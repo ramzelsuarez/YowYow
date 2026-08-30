@@ -33,6 +33,9 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "Pause")
 	bool IsPauseMenuOpen() const { return bPauseMenuOpen; }
+
+	UFUNCTION(BlueprintCallable, Category = "Debug")
+	void ToggleEnemyAI();
 	
 protected:
 	UPROPERTY(EditAnywhere, Category="Input contexts")
@@ -47,6 +50,9 @@ protected:
 	UPROPERTY(EditAnywhere, Category = "Pause")
 	TSubclassOf<UUserWidget> PauseMenuClass;
 
+	UPROPERTY(EditAnywhere, Category = "Debug")
+	TObjectPtr<UInputAction> ToggleEnemyAIAction;
+
 	virtual void BeginPlay() override;
 	virtual void SetupInputComponent() override;
 
@@ -58,4 +64,6 @@ private:
 	TObjectPtr<UUserWidget> PauseMenuWidget;
 
 	bool bPauseMenuOpen = false;
+
+	bool IsPossessedPawnDead() const;
 };

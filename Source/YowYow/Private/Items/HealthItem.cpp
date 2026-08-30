@@ -3,14 +3,28 @@
 
 #include "Items/HealthItem.h"
 
+#include "ActorComponents/HealthComponent.h"
+#include "Characters/EriCharacter.h"
+
 void AHealthItem::OnSphereOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult)
 {
-	if (!OtherActor || OtherActor == this)
+	AEriCharacter* Eri = Cast<AEriCharacter>(OtherActor);
+	if (!Eri)
 	{
 		return;
 	}
 
-	// Temporary pickup behavior.
-	// Later: find HealthComponent and heal player.
+	UHealthComponent* HealthComp = Eri->FindComponentByClass<UHealthComponent>();
+	if (!HealthComp || HealthComp->IsDead())
+	{
+		return;
+	}
+
+	if (HealthComp->GetCurrentHealth() >= HealthComp->GetMaxHealth())
+	{
+		return;
+	}
+
+	HealthComp->Heal(Health);
 	Destroy();
 }
