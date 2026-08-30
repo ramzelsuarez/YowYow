@@ -18,6 +18,7 @@
 #include "CharacterStates/HomingStates.h"
 #include "NiagaraComponent.h"
 #include "NiagaraSystem.h"
+#include "PaperFlipbookComponent.h"
 
 AEriCharacter::AEriCharacter()
 {
@@ -67,6 +68,7 @@ void AEriCharacter::BeginPlay()
 
 	ApplyYoYoMeshAssets();
 	CacheYoYoRests();
+	AttachYoYosToHandSockets();
 
 	if (AttackComponent)
 	{
@@ -120,6 +122,10 @@ void AEriCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
 void AEriCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+	if (PresentationMode == EYoYoPresentationMode::None)
+	{
+		AttachYoYosToHandSockets();
+	}
 	UpdateYoYoPresentation(DeltaTime);
 	UpdateHomingCameraLock(DeltaTime);
 }
@@ -144,18 +150,77 @@ void AEriCharacter::ApplyYoYoMeshAssets()
 
 void AEriCharacter::CacheYoYoRests()
 {
-	// Only call while yoyos are at viewport rest (BeginPlay). Never mid-attack.
+	// Viewport rest is fallback if a sprite frame has no socket. Cache before attaching.
 	RightHand.Component = YoYoRight;
+	RightHand.SocketName = YoYoRightSocketName;
 	LeftHand.Component = YoYoLeft;
+	LeftHand.SocketName = YoYoLeftSocketName;
 
 	if (YoYoRight)
 	{
 		RightHand.RestRelative = YoYoRight->GetRelativeLocation();
+		RightHand.RestRelativeRotation = YoYoRight->GetRelativeRotation();
 	}
 	if (YoYoLeft)
 	{
 		LeftHand.RestRelative = YoYoLeft->GetRelativeLocation();
+		LeftHand.RestRelativeRotation = YoYoLeft->GetRelativeRotation();
 	}
+}
+
+void AEriCharacter::AttachYoYosToHandSockets()
+{
+	AttachYoYoToHandSocket(
+		YoYoRight, RightHand.SocketName, RightHand.RestRelative, RightHand.RestRelativeRotation);
+	AttachYoYoToHandSocket(
+		YoYoLeft, LeftHand.SocketName, LeftHand.RestRelative, LeftHand.RestRelativeRotation);
+}
+
+void AEriCharacter::AttachYoYoToHandSocket(
+	UStaticMeshComponent* YoYo,
+	FName SocketName,
+	const FVector& FallbackRelative,
+	const FRotator& RestRotation)
+{
+	if (!YoYo)
+	{
+		return;
+	}
+
+	UPaperFlipbookComponent* Flipbook = GetSprite();
+	if (Flipbook && !SocketName.IsNone() && Flipbook->DoesSocketExist(SocketName))
+	{
+		if (YoYo->GetAttachParent() != Flipbook || YoYo->GetAttachSocketName() != SocketName)
+		{
+			// Snap location to the hand; keep the mesh rotation authored in the BP.
+			const FAttachmentTransformRules AttachRules(
+				EAttachmentRule::SnapToTarget,
+				EAttachmentRule::KeepRelative,
+				EAttachmentRule::KeepWorld,
+				false
+			);
+			YoYo->AttachToComponent(Flipbook, AttachRules, SocketName);
+		}
+		YoYo->SetRelativeRotation(RestRotation);
+		return;
+	}
+
+	if (YoYo->GetAttachParent() != GetRootComponent() || !YoYo->GetAttachSocketName().IsNone())
+	{
+		YoYo->AttachToComponent(GetRootComponent(), FAttachmentTransformRules::KeepRelativeTransform);
+		YoYo->SetRelativeLocation(FallbackRelative);
+		YoYo->SetRelativeRotation(RestRotation);
+	}
+}
+
+void AEriCharacter::DetachYoYoForFlight(USceneComponent* YoYo)
+{
+	if (!YoYo || !YoYo->GetAttachParent())
+	{
+		return;
+	}
+
+	YoYo->DetachFromComponent(FDetachmentTransformRules::KeepWorldTransform);
 }
 
 void AEriCharacter::GatherHands(EYoYoHand Hand, TArray<FYoYoRuntime*>& OutHands)
@@ -190,6 +255,14 @@ void AEriCharacter::GatherHands(EYoYoHand Hand, TArray<FYoYoRuntime*>& OutHands)
 
 FVector AEriCharacter::GetRestWorldLocation(const FYoYoRuntime& Hand) const
 {
+	if (UPaperFlipbookComponent* Flipbook = GetSprite())
+	{
+		if (!Hand.SocketName.IsNone() && Flipbook->DoesSocketExist(Hand.SocketName))
+		{
+			return Flipbook->GetSocketLocation(Hand.SocketName);
+		}
+	}
+
 	return GetActorTransform().TransformPosition(Hand.RestRelative);
 }
 
@@ -224,7 +297,7 @@ void AEriCharacter::HandleAttackFinished(EAttackType AttackType, bool bCompleted
 		return;
 	}
 
-	// Thrust owns its path: both yoyos must reach the shared apex before returning.
+	// Thrust owns its path: active yoyos reach the apex before returning.
 	// Orbit still returns when the crescent hitboxes close.
 	if (PresentationMode == EYoYoPresentationMode::Orbit)
 	{
@@ -250,7 +323,7 @@ void AEriCharacter::BeginYoYoPresentation(const FAttackData& InAttackData)
 	OrbitRadius = FMath::Max(InAttackData.Range, 1.f);
 
 	TArray<FYoYoRuntime*> Hands;
-	GatherHands(EYoYoHand::Both, Hands);
+	GatherHands(InAttackData.YoYoHand, Hands);
 
 	if (Hands.IsEmpty())
 	{
@@ -261,12 +334,18 @@ void AEriCharacter::BeginYoYoPresentation(const FAttackData& InAttackData)
 		}
 		return;
 	}
-	
-	StartYoYoAttackVFX();
+
+	for (FYoYoRuntime* HandRuntime : Hands)
+	{
+		if (HandRuntime)
+		{
+			DetachYoYoForFlight(HandRuntime->Component.Get());
+		}
+	}
 
 	if (InAttackData.Motion == EAttackMotion::OrbitCircle)
 	{
-		// Dual medialunas: both start behind, sweep once to the front (one per side).
+		// Dual medialunas: selected hands start behind, sweep once to the front.
 		PresentationMode = EYoYoPresentationMode::Orbit;
 		OrbitTravelDegrees = 0.f;
 
@@ -289,24 +368,29 @@ void AEriCharacter::BeginYoYoPresentation(const FAttackData& InAttackData)
 				Hands[Index]->OrbitSideSign = (Index == 0) ? -1.f : +1.f;
 			}
 		}
+
+		StartYoYoAttackVFX();
 		return;
 	}
 
-	// Thrust: both yoyos leave their rest poses and meet at one apex in front
-	// of Eri (isosceles triangle). They return along the same edges.
+	// Thrust: one hand flies straight out; both meet at a shared apex (triangle).
 	PresentationMode = EYoYoPresentationMode::Thrust;
 	const float Range = FMath::Max(InAttackData.Range, 1.f);
 	const FVector ActorLoc = GetActorLocation();
+	const bool bBothHands = Hands.Num() > 1;
 
-	FVector Apex = ActorLoc + CachedAttackForward * Range;
-	float ApexZ = 0.f;
-	int32 ApexZCount = 0;
-	for (const FYoYoRuntime* HandRuntime : Hands)
+	FVector SharedApex = ActorLoc + CachedAttackForward * Range;
+	if (bBothHands)
 	{
-		ApexZ += GetRestWorldLocation(*HandRuntime).Z;
-		++ApexZCount;
+		float ApexZ = 0.f;
+		int32 ApexZCount = 0;
+		for (const FYoYoRuntime* HandRuntime : Hands)
+		{
+			ApexZ += GetRestWorldLocation(*HandRuntime).Z;
+			++ApexZCount;
+		}
+		SharedApex.Z = (ApexZCount > 0) ? (ApexZ / ApexZCount) : ActorLoc.Z;
 	}
-	Apex.Z = (ApexZCount > 0) ? (ApexZ / ApexZCount) : ActorLoc.Z;
 
 	float MaxDist = 0.f;
 	for (FYoYoRuntime* HandRuntime : Hands)
@@ -318,12 +402,15 @@ void AEriCharacter::BeginYoYoPresentation(const FAttackData& InAttackData)
 			continue;
 		}
 
-		const FVector RestWorld = GetRestWorldLocation(*HandRuntime);
-		Comp->SetWorldLocation(RestWorld);
-		HandRuntime->PathStartWorld = RestWorld;
-		HandRuntime->OutboundWorld = Apex;
-		MaxDist = FMath::Max(MaxDist, FVector::Dist(RestWorld, Apex));
+		const FVector StartWorld = Comp->GetComponentLocation();
+		HandRuntime->PathStartWorld = StartWorld;
+		HandRuntime->OutboundWorld = bBothHands
+			? SharedApex
+			: StartWorld + CachedAttackForward * Range;
+		MaxDist = FMath::Max(MaxDist, FVector::Dist(StartWorld, HandRuntime->OutboundWorld));
 	}
+
+	StartYoYoAttackVFX();
 
 	ThrustElapsed = 0.f;
 	ThrustDuration = (YoYoCurrentSpeed > 0.f) ? (MaxDist / YoYoCurrentSpeed) : 0.f;
@@ -467,25 +554,18 @@ void AEriCharacter::UpdateYoYoPresentation(float DeltaTime)
 
 void AEriCharacter::FinishYoYoPresentation()
 {
-	auto ResetHand = [](FYoYoRuntime& Hand)
-	{
-		if (Hand.Component.IsValid())
-		{
-			Hand.Component->SetRelativeLocation(Hand.RestRelative);
-		}
-		Hand.bActive = false;
-	};
+	RightHand.bActive = false;
+	LeftHand.bActive = false;
 
-	ResetHand(RightHand);
-	ResetHand(LeftHand);
-	
 	StopYoYoAttackVFX();
-	
+
 	PresentationMode = EYoYoPresentationMode::None;
 	bYoYoReturning = false;
 	OrbitTravelDegrees = 0.f;
 	ThrustElapsed = 0.f;
 	ThrustDuration = 0.f;
+
+	AttachYoYosToHandSockets();
 
 	// Next buffered attack may start now.
 	if (AttackComponent)
@@ -501,13 +581,13 @@ void AEriCharacter::StartYoYoAttackVFX()
 		return;
 	}
 
-	if (YoYoRightVFX)
+	if (RightHand.bActive && YoYoRightVFX)
 	{
 		YoYoRightVFX->SetAsset(CurrentYoYoAttackVFX);
 		YoYoRightVFX->Activate(true);
 	}
 
-	if (YoYoLeftVFX)
+	if (LeftHand.bActive && YoYoLeftVFX)
 	{
 		YoYoLeftVFX->SetAsset(CurrentYoYoAttackVFX);
 		YoYoLeftVFX->Activate(true);

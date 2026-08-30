@@ -206,9 +206,20 @@ void UAttackComponent::CollectHitboxSources(const FAttackData& AttackData, TArra
 		}
 	};
 
-	// Triangle thrust: both yoyos travel to a shared apex, so both need a hitbox.
-	AddUnique(YoYoRightSource.Get());
-	AddUnique(YoYoLeftSource.Get());
+	switch (AttackData.YoYoHand)
+	{
+	case EYoYoHand::Right:
+		AddUnique(YoYoRightSource.Get());
+		break;
+	case EYoYoHand::Left:
+		AddUnique(YoYoLeftSource.Get());
+		break;
+	case EYoYoHand::Both:
+	default:
+		AddUnique(YoYoRightSource.Get());
+		AddUnique(YoYoLeftSource.Get());
+		break;
+	}
 
 	if (OutSources.IsEmpty())
 	{

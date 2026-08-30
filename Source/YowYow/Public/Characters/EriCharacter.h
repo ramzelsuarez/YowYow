@@ -156,6 +156,13 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "YoYo", meta = (ClampMin = "0.1"))
 	float YoYoReturnSpeedMultiplier = 1.5f;
 
+	/** Paper2D socket on each sprite frame. Idle/run attach here; attack detaches. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "YoYo|Sockets")
+	FName YoYoRightSocketName = TEXT("Hand_R");
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "YoYo|Sockets")
+	FName YoYoLeftSocketName = TEXT("Hand_L");
+
 	/** How fast control yaw catches up to flight direction while homing (deg/s). 0 = snap. Fast but readable. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Homing|Camera", meta = (ClampMin = "0.0"))
 	float HomingCameraYawInterpSpeed = 540.f;
@@ -178,7 +185,9 @@ private:
 	struct FYoYoRuntime
 	{
 		TWeakObjectPtr<USceneComponent> Component;
+		FName SocketName = NAME_None;
 		FVector RestRelative = FVector::ZeroVector;
+		FRotator RestRelativeRotation = FRotator::ZeroRotator;
 		FVector OutboundWorld = FVector::ZeroVector;
 		/** World position at the start of the current thrust/return lerp. */
 		FVector PathStartWorld = FVector::ZeroVector;
@@ -189,6 +198,14 @@ private:
 
 	void ApplyYoYoMeshAssets();
 	void CacheYoYoRests();
+	void AttachYoYosToHandSockets();
+	void AttachYoYoToHandSocket(
+		UStaticMeshComponent* YoYo,
+		FName SocketName,
+		const FVector& FallbackRelative,
+		const FRotator& RestRotation
+	);
+	void DetachYoYoForFlight(USceneComponent* YoYo);
 	void BeginYoYoPresentation(const FAttackData& InAttackData);
 	void UpdateYoYoPresentation(float DeltaTime);
 	void StartYoYoReturn();
