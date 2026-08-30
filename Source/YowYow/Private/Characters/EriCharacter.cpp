@@ -29,7 +29,7 @@ AEriCharacter::AEriCharacter()
 
 	CameraBoom = CreateDefaultSubobject<USpringArmComponent>(TEXT("CameraBoom"));
 	CameraBoom->SetupAttachment(GetRootComponent());
-	CameraBoom->TargetArmLength = 300.0f;
+	CameraBoom->TargetArmLength = 500.0f;
 	CameraBoom->bUsePawnControlRotation = true;
 
 	ViewCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("ViewCamera"));
@@ -215,10 +215,8 @@ void AEriCharacter::HandleAttackStarted(EAttackType AttackType, FAttackData Star
 
 void AEriCharacter::HandleAttackFinished(EAttackType AttackType, bool bCompleted)
 {
-	// Hit window closed: begin return. Never snap home here.
 	if (PresentationMode == EYoYoPresentationMode::None)
 	{
-		// No active presentation (or already home) — unblock the attack cycle.
 		if (AttackComponent)
 		{
 			AttackComponent->NotifyPresentationComplete();
@@ -226,7 +224,12 @@ void AEriCharacter::HandleAttackFinished(EAttackType AttackType, bool bCompleted
 		return;
 	}
 
-	StartYoYoReturn();
+	// Thrust owns its path: both yoyos must reach the shared apex before returning.
+	// Orbit still returns when the crescent hitboxes close.
+	if (PresentationMode == EYoYoPresentationMode::Orbit)
+	{
+		StartYoYoReturn();
+	}
 }
 
 void AEriCharacter::BeginYoYoPresentation(const FAttackData& InAttackData)
@@ -247,10 +250,7 @@ void AEriCharacter::BeginYoYoPresentation(const FAttackData& InAttackData)
 	OrbitRadius = FMath::Max(InAttackData.Range, 1.f);
 
 	TArray<FYoYoRuntime*> Hands;
-	const EYoYoHand Hand = (InAttackData.Motion == EAttackMotion::OrbitCircle)
-		? EYoYoHand::Both
-		: InAttackData.YoYoHand;
-	GatherHands(Hand, Hands);
+	GatherHands(EYoYoHand::Both, Hands);
 
 	if (Hands.IsEmpty())
 	{
@@ -292,12 +292,23 @@ void AEriCharacter::BeginYoYoPresentation(const FAttackData& InAttackData)
 		return;
 	}
 
-	// Thrust: start from viewport rest, fly toward the *centerline* apex (not side-offset),
-	// then return home. Keeps hits in front of Eri instead of off to each hip.
+	// Thrust: both yoyos leave their rest poses and meet at one apex in front
+	// of Eri (isosceles triangle). They return along the same edges.
 	PresentationMode = EYoYoPresentationMode::Thrust;
 	const float Range = FMath::Max(InAttackData.Range, 1.f);
 	const FVector ActorLoc = GetActorLocation();
 
+	FVector Apex = ActorLoc + CachedAttackForward * Range;
+	float ApexZ = 0.f;
+	int32 ApexZCount = 0;
+	for (const FYoYoRuntime* HandRuntime : Hands)
+	{
+		ApexZ += GetRestWorldLocation(*HandRuntime).Z;
+		++ApexZCount;
+	}
+	Apex.Z = (ApexZCount > 0) ? (ApexZ / ApexZCount) : ActorLoc.Z;
+
+	float MaxDist = 0.f;
 	for (FYoYoRuntime* HandRuntime : Hands)
 	{
 		HandRuntime->bActive = true;
@@ -309,11 +320,16 @@ void AEriCharacter::BeginYoYoPresentation(const FAttackData& InAttackData)
 
 		const FVector RestWorld = GetRestWorldLocation(*HandRuntime);
 		Comp->SetWorldLocation(RestWorld);
-
-		// Same height as rest, but XY centered on the character so the path converges inward.
-		FVector Apex = ActorLoc + CachedAttackForward * Range;
-		Apex.Z = RestWorld.Z;
+		HandRuntime->PathStartWorld = RestWorld;
 		HandRuntime->OutboundWorld = Apex;
+		MaxDist = FMath::Max(MaxDist, FVector::Dist(RestWorld, Apex));
+	}
+
+	ThrustElapsed = 0.f;
+	ThrustDuration = (YoYoCurrentSpeed > 0.f) ? (MaxDist / YoYoCurrentSpeed) : 0.f;
+	if (ThrustDuration <= KINDA_SMALL_NUMBER)
+	{
+		StartYoYoReturn();
 	}
 }
 
@@ -411,8 +427,13 @@ void AEriCharacter::UpdateYoYoPresentation(float DeltaTime)
 		return;
 	}
 
-	// Thrust outbound / return
-	bool bAnyStillMoving = false;
+	// Thrust: shared alpha so both yoyos meet at the apex at the same time.
+	ThrustElapsed += DeltaTime;
+
+	const float Duration = bYoYoReturning
+		? FMath::Max(ThrustDuration / FMath::Max(YoYoReturnSpeedMultiplier, 0.1f), KINDA_SMALL_NUMBER)
+		: FMath::Max(ThrustDuration, KINDA_SMALL_NUMBER);
+	const float Alpha = FMath::Clamp(ThrustElapsed / Duration, 0.f, 1.f);
 
 	auto UpdateThrustHand = [&](FYoYoRuntime& Hand)
 	{
@@ -421,34 +442,26 @@ void AEriCharacter::UpdateYoYoPresentation(float DeltaTime)
 			return;
 		}
 
-		USceneComponent* Comp = Hand.Component.Get();
-		const FVector Target = bYoYoReturning ? GetRestWorldLocation(Hand) : Hand.OutboundWorld;
-		const float Speed = bYoYoReturning ? YoYoCurrentSpeed * YoYoReturnSpeedMultiplier : YoYoCurrentSpeed;
-		const FVector NewLocation = FMath::VInterpConstantTo(Comp->GetComponentLocation(), Target, DeltaTime, Speed);
-		Comp->SetWorldLocation(NewLocation);
-
-		if (!NewLocation.Equals(Target, 1.5f))
-		{
-			bAnyStillMoving = true;
-		}
+		const FVector End = bYoYoReturning ? GetRestWorldLocation(Hand) : Hand.OutboundWorld;
+		const FVector Start = bYoYoReturning ? Hand.OutboundWorld : Hand.PathStartWorld;
+		Hand.Component->SetWorldLocation(FMath::Lerp(Start, End, Alpha));
 	};
 
 	UpdateThrustHand(RightHand);
 	UpdateThrustHand(LeftHand);
 
-	if (bAnyStillMoving)
+	if (Alpha < 1.f)
 	{
 		return;
 	}
 
 	if (!bYoYoReturning)
 	{
-		// Reached apex — auto start return even if hitbox hasn't closed yet.
-		bYoYoReturning = true;
+		StartYoYoReturn();
+		ThrustElapsed = 0.f;
 		return;
 	}
 
-	// Fully home.
 	FinishYoYoPresentation();
 }
 
@@ -471,6 +484,8 @@ void AEriCharacter::FinishYoYoPresentation()
 	PresentationMode = EYoYoPresentationMode::None;
 	bYoYoReturning = false;
 	OrbitTravelDegrees = 0.f;
+	ThrustElapsed = 0.f;
+	ThrustDuration = 0.f;
 
 	// Next buffered attack may start now.
 	if (AttackComponent)
