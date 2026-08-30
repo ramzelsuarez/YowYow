@@ -31,6 +31,9 @@ ACharacterBase::ACharacterBase()
 void ACharacterBase::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+
+	TryBindCameraManager();
+	UpdateSpriteFacingToCamera();
 }
 
 void ACharacterBase::BeginPlay()
@@ -48,13 +51,8 @@ void ACharacterBase::BeginPlay()
 	LandedDelegate.AddDynamic(this, &ACharacterBase::HandleLanded);
 	MovementModeChangedDelegate.AddDynamic(this, &ACharacterBase::HandleMovementModeChanged);
 
-	CameraManager = Cast<ASpinningRiotCameraManager>(UGameplayStatics::GetPlayerCameraManager(GetWorld(), 0));
-
-	if (CameraManager)
-	{
-		CameraManager->OnCameraRotationChanged.AddUObject(this, &ACharacterBase::HandleCameraRotationChanged);
-		HandleCameraRotationChanged(CameraManager->GetCameraRotation());
-	}
+	TryBindCameraManager();
+	UpdateSpriteFacingToCamera();
 }
 
 void ACharacterBase::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -182,6 +180,35 @@ bool ACharacterBase::CanMove()
 	// Block locomotion during active hit window and post-hit recovery (area anti-spam).
 	const ECharacterAttackState AttackState = CharacterStateComponent->GetAttackState();
 	return AttackState == ECharacterAttackState::None;
+}
+
+void ACharacterBase::TryBindCameraManager()
+{
+	if (CameraManager)
+	{
+		return;
+	}
+
+	CameraManager = Cast<ASpinningRiotCameraManager>(UGameplayStatics::GetPlayerCameraManager(GetWorld(), 0));
+	if (!CameraManager)
+	{
+		return;
+	}
+
+	CameraManager->OnCameraRotationChanged.AddUObject(this, &ACharacterBase::HandleCameraRotationChanged);
+}
+
+void ACharacterBase::UpdateSpriteFacingToCamera()
+{
+	APlayerCameraManager* Cam = CameraManager
+		? static_cast<APlayerCameraManager*>(CameraManager)
+		: UGameplayStatics::GetPlayerCameraManager(GetWorld(), 0);
+	if (!Cam)
+	{
+		return;
+	}
+
+	HandleCameraRotationChanged(Cam->GetCameraRotation());
 }
 
 void ACharacterBase::HandleCameraRotationChanged(const FRotator& CameraRotation)

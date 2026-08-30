@@ -13,5 +13,7 @@ UCLASS()
 class YOWYOW_API AMainMenu : public AGameModeBase
 {
 	GENERATED_BODY()
-	
+
+protected:
+	virtual void BeginPlay() override;
 };

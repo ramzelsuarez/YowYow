@@ -34,6 +34,9 @@ class YOWYOW_API AEriCharacter : public ACharacterBase
 public:
 	AEriCharacter();
 
+	/** Loads BP_EriCharacter (and its Niagara/mesh refs) so they stay resident across the title → game OpenLevel. */
+	static void PreloadCharacterAssets();
+
 	/** True while a yoyo is mid thrust/orbit/return (blocks / buffers next attack). */
 	UFUNCTION(BlueprintPure, Category = "YoYo")
 	bool IsYoYoPresentationActive() const { return PresentationMode != EYoYoPresentationMode::None; }
@@ -52,9 +55,6 @@ protected:
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
 	virtual void Tick(float DeltaTime) override;
-
-	void PrecacheCombatVFX();
-	void FinishNiagaraPrecache();
 
 	UPROPERTY(EditAnywhere, Category = "Input Actions|Movement")
 	UInputAction* MovementAction = nullptr;
@@ -260,6 +260,4 @@ private:
 
 	/** Camera locked behind Eri during homing dash (back sprite only). */
 	bool bHomingCameraLocked = false;
-
-	FTimerHandle NiagaraPrecacheTimerHandle;
 };

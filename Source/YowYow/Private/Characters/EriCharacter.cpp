@@ -18,8 +18,27 @@
 #include "CharacterStates/HomingStates.h"
 #include "NiagaraComponent.h"
 #include "NiagaraSystem.h"
-#include "TimerManager.h"
 #include "PaperFlipbookComponent.h"
+#include "UObject/StrongObjectPtr.h"
+
+namespace
+{
+	TStrongObjectPtr<UClass> GPreloadedEriClass;
+	const TCHAR* EriBlueprintPath = TEXT("/Game/Blueprints/Characters/Eri/BP_EriCharacter.BP_EriCharacter_C");
+}
+
+void AEriCharacter::PreloadCharacterAssets()
+{
+	if (GPreloadedEriClass.IsValid())
+	{
+		return;
+	}
+
+	if (UClass* EriClass = LoadClass<AEriCharacter>(nullptr, EriBlueprintPath))
+	{
+		GPreloadedEriClass.Reset(EriClass);
+	}
+}
 
 AEriCharacter::AEriCharacter()
 {
@@ -88,12 +107,18 @@ void AEriCharacter::BeginPlay()
 		HomingAttackComponent->OnHomingAttackFinished.AddDynamic(this, &AEriCharacter::HandleHomingAttackFinished);
 	}
 	
-	if (TrickAuraVFXSystem && TrickAuraVFX)
+	if (YoYoRightVFX && NormalAttackVFXSystem)
+	{
+		YoYoRightVFX->SetAsset(NormalAttackVFXSystem);
+	}
+	if (YoYoLeftVFX && NormalAttackVFXSystem)
+	{
+		YoYoLeftVFX->SetAsset(NormalAttackVFXSystem);
+	}
+	if (TrickAuraVFX && TrickAuraVFXSystem)
 	{
 		TrickAuraVFX->SetAsset(TrickAuraVFXSystem);
 	}
-
-	PrecacheCombatVFX();
 }
 
 void AEriCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -111,11 +136,6 @@ void AEriCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
 		HomingAttackComponent->OnHomingAttackFinished.RemoveDynamic(this, &AEriCharacter::HandleHomingAttackFinished);
 	}
 	
-	if (UWorld* World = GetWorld())
-	{
-		World->GetTimerManager().ClearTimer(NiagaraPrecacheTimerHandle);
-	}
-
 	StopYoYoAttackVFX();
 	ClearPresentationAttackType();
 	
@@ -723,77 +743,25 @@ void AEriCharacter::ClearPresentationAttackType()
 	PresentationAttackType = EAttackType::None;
 }
 
-void AEriCharacter::PrecacheCombatVFX()
+void AEriCharacter::StartYoYoAttackVFX()
 {
-	auto Prime = [](UNiagaraComponent* Comp, UNiagaraSystem* System)
+	auto Play = [this](UNiagaraComponent* Comp, bool bHandActive)
 	{
-		if (!Comp || !System)
+		if (!bHandActive || !Comp)
 		{
 			return;
 		}
 
-#if WITH_EDITOR
-		System->RequestCompile(false);
-#endif
-		Comp->SetAsset(System);
-		Comp->SetHiddenInGame(true);
-		Comp->SetVisibility(false);
+		if (CurrentYoYoAttackVFX && Comp->GetAsset() != CurrentYoYoAttackVFX)
+		{
+			Comp->SetAsset(CurrentYoYoAttackVFX);
+		}
+
 		Comp->Activate(true);
 	};
 
-	Prime(YoYoRightVFX, NormalAttackVFXSystem);
-	Prime(YoYoLeftVFX, AreaAttackVFXSystem);
-	Prime(TrickAuraVFX, TrickAuraVFXSystem);
-
-	if (UWorld* World = GetWorld())
-	{
-		World->GetTimerManager().SetTimer(
-			NiagaraPrecacheTimerHandle,
-			this,
-			&AEriCharacter::FinishNiagaraPrecache,
-			0.25f,
-			false
-		);
-	}
-}
-
-void AEriCharacter::FinishNiagaraPrecache()
-{
-	auto Restore = [](UNiagaraComponent* Comp)
-	{
-		if (!Comp)
-		{
-			return;
-		}
-
-		Comp->DeactivateImmediate();
-		Comp->SetHiddenInGame(false);
-		Comp->SetVisibility(true);
-	};
-
-	Restore(YoYoRightVFX);
-	Restore(YoYoLeftVFX);
-	Restore(TrickAuraVFX);
-}
-
-void AEriCharacter::StartYoYoAttackVFX()
-{
-	if (!CurrentYoYoAttackVFX)
-	{
-		return;
-	}
-
-	if (RightHand.bActive && YoYoRightVFX)
-	{
-		YoYoRightVFX->SetAsset(CurrentYoYoAttackVFX);
-		YoYoRightVFX->Activate(true);
-	}
-
-	if (LeftHand.bActive && YoYoLeftVFX)
-	{
-		YoYoLeftVFX->SetAsset(CurrentYoYoAttackVFX);
-		YoYoLeftVFX->Activate(true);
-	}
+	Play(YoYoRightVFX, RightHand.bActive);
+	Play(YoYoLeftVFX, LeftHand.bActive);
 }
 
 void AEriCharacter::StopYoYoAttackVFX()

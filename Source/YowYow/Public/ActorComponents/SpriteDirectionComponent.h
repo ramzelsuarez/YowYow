@@ -36,8 +36,10 @@ protected:
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 private:
+	void TryBindCameraManager();
 	void HandleCameraRotationChanged(const FRotator& CameraRotation);
 	void UpdateDirectionFromCamera();
+	FRotator ResolveCameraRotation() const;
 	FVector2D QuantizeDirection(const FVector2D& InDirection) const;
 
 	ASpinningRiotCameraManager* CameraManager = nullptr;

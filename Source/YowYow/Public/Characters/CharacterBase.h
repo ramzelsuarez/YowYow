@@ -101,7 +101,10 @@ protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
 	USpriteDirectionComponent* SpriteDirectionComponent = nullptr;
 
+	void UpdateSpriteFacingToCamera();
+
 private:
+	void TryBindCameraManager();
 	void HandleCameraRotationChanged(const FRotator &CameraRotation);
 
 	UFUNCTION()

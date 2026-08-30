@@ -2,29 +2,41 @@
 
 
 #include "ActorComponents/SpriteDirectionComponent.h"
+#include "Camera/PlayerCameraManager.h"
 #include "CameraManagers/SpinningRiotCameraManager.h"
+#include "GameFramework/PlayerController.h"
 #include "Kismet/GameplayStatics.h"
 
-// Sets default values for this component's properties
 USpriteDirectionComponent::USpriteDirectionComponent()
 {
 	PrimaryComponentTick.bCanEverTick = true;
+	PrimaryComponentTick.bStartWithTickEnabled = true;
 }
 
-// Called when the game starts
 void USpriteDirectionComponent::BeginPlay()
 {
 	Super::BeginPlay();
+	SetComponentTickEnabled(true);
+	TryBindCameraManager();
+	UpdateDirectionFromCamera();
+}
 
-	CameraManager = Cast<ASpinningRiotCameraManager>(UGameplayStatics::GetPlayerCameraManager(GetWorld(), 0));
-
+void USpriteDirectionComponent::TryBindCameraManager()
+{
 	if (CameraManager)
 	{
-		CachedCameraRotation = CameraManager->GetCameraRotation();
-		CameraManager->OnCameraRotationChanged.AddUObject(this, &USpriteDirectionComponent::HandleCameraRotationChanged);
+		return;
 	}
 
-	UpdateDirectionFromCamera();
+	APlayerCameraManager* AnyCamera = UGameplayStatics::GetPlayerCameraManager(GetWorld(), 0);
+	CameraManager = Cast<ASpinningRiotCameraManager>(AnyCamera);
+	if (!CameraManager)
+	{
+		return;
+	}
+
+	CachedCameraRotation = CameraManager->GetCameraRotation();
+	CameraManager->OnCameraRotationChanged.AddUObject(this, &USpriteDirectionComponent::HandleCameraRotationChanged);
 }
 
 void USpriteDirectionComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -43,6 +55,21 @@ void USpriteDirectionComponent::HandleCameraRotationChanged(const FRotator& Came
 	UpdateDirectionFromCamera();
 }
 
+FRotator USpriteDirectionComponent::ResolveCameraRotation() const
+{
+	if (APlayerCameraManager* Cam = UGameplayStatics::GetPlayerCameraManager(GetWorld(), 0))
+	{
+		return Cam->GetCameraRotation();
+	}
+
+	if (const APlayerController* PC = UGameplayStatics::GetPlayerController(GetWorld(), 0))
+	{
+		return PC->GetControlRotation();
+	}
+
+	return CachedCameraRotation;
+}
+
 void USpriteDirectionComponent::UpdateDirectionFromCamera()
 {
 	AActor* Owner = GetOwner();
@@ -51,6 +78,8 @@ void USpriteDirectionComponent::UpdateDirectionFromCamera()
 	{
 		return;
 	}
+
+	CachedCameraRotation = ResolveCameraRotation();
 
 	const FRotator CameraYawRotation(0.f, CachedCameraRotation.Yaw, 0.f);
 	const FVector CameraForward = FRotationMatrix(CameraYawRotation).GetUnitAxis(EAxis::X);
@@ -91,5 +120,6 @@ void USpriteDirectionComponent::TickComponent(float DeltaTime, ELevelTick TickTy
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 
+	TryBindCameraManager();
 	UpdateDirectionFromCamera();
 }
