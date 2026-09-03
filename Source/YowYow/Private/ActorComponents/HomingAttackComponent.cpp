@@ -4,9 +4,11 @@
 #include "ActorComponents/HomingAttackComponent.h"
 
 #include "ActorComponents/CharacterStateComponent.h"
+#include "ActorComponents/ComboComponent.h"
 #include "Characters/CharacterBase.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PawnMovementComponent.h"
+#include "Interfaces/Comboable.h"
 #include "Interfaces/Homingable.h"
 #include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetSystemLibrary.h"
@@ -181,6 +183,10 @@ void UHomingAttackComponent::ApplyHomingHitDamage()
 	}
 
 	AController* InstigatorController = OwnerCharacter->GetController();
+
+	const bool bGrantsCombo =
+		CurrentTarget->Implements<UComboable>() && IComboable::Execute_CanGrantCombo(CurrentTarget);
+
 	UGameplayStatics::ApplyDamage(
 		CurrentTarget,
 		HomingDamage,
@@ -188,6 +194,11 @@ void UHomingAttackComponent::ApplyHomingHitDamage()
 		OwnerCharacter,
 		nullptr
 	);
+
+	if (bGrantsCombo)
+	{
+		UComboComponent::NotifyHit(OwnerCharacter, CurrentTarget);
+	}
 }
 
 void UHomingAttackComponent::FinishHomingAttack()

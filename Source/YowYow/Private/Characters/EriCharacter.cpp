@@ -5,6 +5,7 @@
 
 #include "ActorComponents/AttackComponent.h"
 #include "ActorComponents/CharacterStateComponent.h"
+#include "ActorComponents/ComboComponent.h"
 #include "ActorComponents/HomingAttackComponent.h"
 #include "ActorComponents/TrickGaugeComponent.h"
 #include "Camera/CameraComponent.h"
@@ -77,6 +78,8 @@ AEriCharacter::AEriCharacter()
 	TrickAuraVFX = CreateDefaultSubobject<UNiagaraComponent>(TEXT("TrickAuraVFX"));
 	TrickAuraVFX->SetupAttachment(GetRootComponent());
 	TrickAuraVFX->SetAutoActivate(false);
+
+	ComboComponent = CreateDefaultSubobject<UComboComponent>(TEXT("ComboComponent"));
 }
 
 void AEriCharacter::BeginPlay()

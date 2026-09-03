@@ -13,6 +13,7 @@ class UCameraComponent;
 class USpringArmComponent;
 class UHomingAttackComponent;
 class UTrickGaugeComponent;
+class UComboComponent;
 class UStaticMeshComponent;
 class UStaticMesh;
 class USceneComponent;
@@ -127,6 +128,9 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
 	UTrickGaugeComponent* TrickGaugeComponent = nullptr;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+	UComboComponent* ComboComponent = nullptr;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
 	UHomingAttackComponent* HomingAttackComponent = nullptr;

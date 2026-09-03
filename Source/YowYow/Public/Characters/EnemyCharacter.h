@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Characters/CharacterBase.h"
+#include "Interfaces/Comboable.h"
 #include "Interfaces/Homingable.h"
 #include "EnemyCharacter.generated.h"
 
@@ -18,7 +19,7 @@ class AHealthItem;
  * - Attacks/drops/etc should live within this class and consume a DataAsset to handle enemy-specific behavior
  */
 UCLASS(Blueprintable)
-class YOWYOW_API AEnemyCharacter : public ACharacterBase, public IHomingable
+class YOWYOW_API AEnemyCharacter : public ACharacterBase, public IHomingable, public IComboable
 {
 	GENERATED_BODY()
 
@@ -27,6 +28,8 @@ public:
 	virtual void SetHomingTargeted_Implementation(bool bTargeted) override;
 	virtual bool CanBeHomed_Implementation() const override;
 	virtual FVector GetTargetLocation_Implementation() override;
+
+	virtual bool CanGrantCombo_Implementation() const override;
 
 protected:
 	virtual void BeginPlay() override;

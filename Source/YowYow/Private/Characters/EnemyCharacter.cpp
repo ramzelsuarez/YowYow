@@ -68,6 +68,21 @@ bool AEnemyCharacter::CanBeHomed_Implementation() const
 	return true;
 }
 
+bool AEnemyCharacter::CanGrantCombo_Implementation() const
+{
+	if (HealthComponent && HealthComponent->IsDead())
+	{
+		return false;
+	}
+
+	if (CharacterStateComponent && CharacterStateComponent->GetLifeState() == ECharacterLifeState::Dead)
+	{
+		return false;
+	}
+
+	return true;
+}
+
 FVector AEnemyCharacter::GetTargetLocation_Implementation()
 {
 	return GetActorLocation();

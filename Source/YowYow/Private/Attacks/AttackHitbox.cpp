@@ -1,10 +1,12 @@
 #include "Attacks/AttackHitbox.h"
 
+#include "ActorComponents/ComboComponent.h"
 #include "Combat/CombatImpactLibrary.h"
 #include "Components/SceneComponent.h"
 #include "DrawDebugHelpers.h"
 #include "Engine/World.h"
 #include "GameFramework/Pawn.h"
+#include "Interfaces/Comboable.h"
 #include "Kismet/GameplayStatics.h"
 
 namespace AttackHitboxDefaults
@@ -309,6 +311,9 @@ void AAttackHitbox::HandleHit(AActor* HitActor)
 	APawn* InstigatorPawn = Cast<APawn>(SourceActor.Get());
 	AController* InstigatorController = InstigatorPawn ? InstigatorPawn->GetController() : nullptr;
 
+	const bool bGrantsCombo =
+		HitActor->Implements<UComboable>() && IComboable::Execute_CanGrantCombo(HitActor);
+
 	UGameplayStatics::ApplyDamage(
 		HitActor,
 		AttackData.Damage,
@@ -316,6 +321,11 @@ void AAttackHitbox::HandleHit(AActor* HitActor)
 		SourceActor.Get(),
 		nullptr
 	);
+
+	if (bGrantsCombo)
+	{
+		UComboComponent::NotifyHit(SourceActor.Get(), HitActor);
+	}
 
 	// Away from attacker (horizontal). Works for player hits on enemies and vice versa.
 	FVector KnockbackDir = HitActor->GetActorLocation() - SourceActor->GetActorLocation();
