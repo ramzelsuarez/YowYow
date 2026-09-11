@@ -2,6 +2,7 @@
 
 #include "ActorComponents/CharacterStateComponent.h"
 #include "Characters/CharacterBase.h"
+#include "Characters/EnemyCharacter.h"
 #include "CharacterStates/CharacterStates.h"
 #include "Kismet/GameplayStatics.h"
 #include "BattleSystem/WaveEnemyManager.h"
@@ -9,6 +10,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameModes/SpinningRiot.h"
 #include "Engine/World.h"
+#include "EngineUtils.h"
 
 bool UEnemyAIComponent::bGlobalAIFrozen = false;
 
@@ -144,6 +146,48 @@ void UEnemyAIComponent::FacePlayer()
 	OwnerCharacter->SetActorRotation(ToPlayer.Rotation());
 }
 
+void UEnemyAIComponent::MoveWithSeparation(const FVector& DesiredOffset, float DeltaTime)
+{
+	FVector SeparationVelocity = FVector::ZeroVector;
+	const FVector OwnLocation = OwnerCharacter->GetActorLocation();
+	const FVector ChaseDirection = DesiredOffset.GetSafeNormal2D();
+	if (SeparationDistance > 0.f && SeparationSpeed > 0.f)
+	{
+		// Includes placed enemies and wave spawns; dead enemies no longer occupy crowd space.
+		for (TActorIterator<AEnemyCharacter> It(GetWorld()); It; ++It)
+		{
+			const AEnemyCharacter* OtherEnemy = *It;
+			if (OtherEnemy == OwnerCharacter || OtherEnemy->IsDead()) continue;
+			FVector Away = OwnLocation - OtherEnemy->GetActorLocation();
+			if (FMath::Abs(Away.Z) > SeparationDistance) continue;
+			Away.Z = 0.f;
+			const float Distance = Away.Size();
+			if (Distance >= SeparationDistance) continue;
+
+			// Opposite directions for coincident spawns, stable across frames.
+			Away = Distance > KINDA_SMALL_NUMBER ? Away / Distance
+				: FVector(OwnerCharacter->GetUniqueID() < OtherEnemy->GetUniqueID() ? -1.f : 1.f, 0.f, 0.f);
+			const float Weight = 1.f - Distance / SeparationDistance;
+			SeparationVelocity += Away * Weight * SeparationSpeed;
+
+			// Pure repulsion can stall a queue behind the front enemy; steer around it.
+			if (FVector::DotProduct(ChaseDirection, Away) < -0.85f)
+			{
+				const float Side = (OwnerCharacter->GetUniqueID() % 2) == 0 ? 1.f : -1.f;
+				SeparationVelocity += FVector::CrossProduct(FVector::UpVector, ChaseDirection)
+					* Side * Weight * SeparationSpeed;
+			}
+		}
+	}
+
+	const float MaxStep = FMath::Max(MoveSpeed * DeltaTime, 0.f);
+	const FVector MovementOffset = (DesiredOffset + SeparationVelocity * DeltaTime).GetClampedToMaxSize(MaxStep);
+	if (!MovementOffset.IsNearlyZero())
+	{
+		OwnerCharacter->AddActorWorldOffset(MovementOffset, true);
+	}
+}
+
 void UEnemyAIComponent::UpdateAI(float DeltaTime)
 {
 	if (!CanAct())
@@ -155,25 +199,29 @@ void UEnemyAIComponent::UpdateAI(float DeltaTime)
 	FVector PlayerLocation = PlayerPawn->GetActorLocation();
 	PlayerLocation.Z = EnemyLocation.Z;
 
-	const float DistanceToPlayer = FVector::Dist(EnemyLocation, PlayerLocation);
+	float DistanceToPlayer = FVector::Dist(EnemyLocation, PlayerLocation);
 	if (DistanceToPlayer > DetectionRange)
 	{
 		return;
 	}
 
+	const float DesiredAttackRange = bUseRangedAttack ? FMath::Max(RangedAttackRange, 1.f) : FMath::Max(AttackRange, 0.f);
+	FVector ChaseOffset = FVector::ZeroVector;
+	if (DistanceToPlayer > DesiredAttackRange)
+	{
+		const float StopDistance = bUseRangedAttack
+			? FMath::Clamp(RangedStopDistance, 0.f, DesiredAttackRange) : DesiredAttackRange * 0.95f;
+		const float ChaseStep = FMath::Min(FMath::Max(MoveSpeed * DeltaTime, 0.f), DistanceToPlayer - StopDistance);
+		ChaseOffset = (PlayerLocation - EnemyLocation).GetSafeNormal() * ChaseStep;
+	}
+	// Also separate while waiting for cooldown/token; CanAct above protects attacks and knockback.
+	MoveWithSeparation(ChaseOffset, DeltaTime);
+	DistanceToPlayer = FVector::Dist2D(OwnerCharacter->GetActorLocation(), PlayerLocation);
 	FacePlayer();
+	if (DistanceToPlayer > DesiredAttackRange) return;
 
 	if (bUseRangedAttack)
 	{
-		const float ShotRange = FMath::Max(RangedAttackRange, 1.f);
-		const float StopDistance = FMath::Clamp(RangedStopDistance, 0.f, ShotRange);
-		if (DistanceToPlayer > ShotRange)
-		{
-			const FVector ChaseDirection = (PlayerLocation - EnemyLocation).GetSafeNormal();
-			const float ChaseStep = FMath::Min(FMath::Max(MoveSpeed * DeltaTime, 0.f), DistanceToPlayer - StopDistance);
-			OwnerCharacter->AddActorWorldOffset(ChaseDirection * ChaseStep, true);
-			return;
-		}
 		OwnerCharacter->GetCharacterMovement()->StopMovementImmediately();
 		if (!CanAttack()) return;
 		const bool bHasRangedToken = !WaveManager || WaveManager->RequestAttackToken(OwnerCharacter);
@@ -238,7 +286,4 @@ void UEnemyAIComponent::UpdateAI(float DeltaTime)
 
 		return;
 	}
-
-	const FVector Direction = (PlayerLocation - EnemyLocation).GetSafeNormal();
-	OwnerCharacter->AddActorWorldOffset(Direction * MoveSpeed * DeltaTime, true);
 }

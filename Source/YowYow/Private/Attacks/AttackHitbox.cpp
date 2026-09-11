@@ -2,6 +2,7 @@
 
 #include "ActorComponents/ComboComponent.h"
 #include "ActorComponents/HealthComponent.h"
+#include "Characters/EnemyCharacter.h"
 #include "GameModes/SpinningRiot.h"
 #include "Combat/CombatImpactLibrary.h"
 #include "Components/SceneComponent.h"
@@ -345,6 +346,8 @@ void AAttackHitbox::HandleHit(AActor* HitActor)
 	{
 		return;
 	}
+	// Enemy swings ignore allies, including damage, knockback, hitstop and combo credit.
+	if (SourceActor->IsA<AEnemyCharacter>() && HitActor->IsA<AEnemyCharacter>()) return;
 	const ASpinningRiot* Demo = GetWorld()->GetAuthGameMode<ASpinningRiot>();
 	if (Demo && Demo->GetDemoPhase() != EDemoPhase::Play) return;
 	if (const UHealthComponent* HitHealth = HitActor->FindComponentByClass<UHealthComponent>())

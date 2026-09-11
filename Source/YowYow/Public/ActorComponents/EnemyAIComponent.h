@@ -44,6 +44,14 @@ private:
 	UPROPERTY(EditAnywhere, Category = "Enemy AI")
 	float AttackCooldown = 1.5f;
 
+	/** Preferred horizontal distance between enemy centers, independent of sprite/capsule size. Zero disables separation. */
+	UPROPERTY(EditAnywhere, Category = "Enemy AI|Separation", meta = (ClampMin = "0.0"))
+	float SeparationDistance = 220.f;
+
+	/** Strength of crowd avoidance in cm/s. Final movement is still limited by MoveSpeed. */
+	UPROPERTY(EditAnywhere, Category = "Enemy AI|Separation", meta = (ClampMin = "0.0"))
+	float SeparationSpeed = 300.f;
+
 	/**
 	 * While horizontal speed is above this, skip chase/attack so knockback can play out.
 	 * Otherwise AddActorWorldOffset every tick cancels LaunchCharacter.
@@ -74,6 +82,7 @@ private:
 	static bool bGlobalAIFrozen;
 
 	void UpdateAI(float DeltaTime);
+	void MoveWithSeparation(const FVector& DesiredOffset, float DeltaTime);
 	bool CanAct() const;
 	bool CanAttack() const;
 	void FacePlayer();
