@@ -5,10 +5,14 @@
 #include "CoreMinimal.h"
 #include "Characters/CharacterBase.h"
 #include "Types/AttackTypes.h"
+#include "Types/TrickTypes.h"
 #include "EriCharacter.generated.h"
 
 struct FInputActionValue;
 class UInputAction;
+class UInputMappingContext;
+class UEnhancedInputLocalPlayerSubsystem;
+class UEnhancedInputComponent;
 class UCameraComponent;
 class USpringArmComponent;
 class UHomingAttackComponent;
@@ -21,6 +25,11 @@ class UAttackComponent;
 class UNiagaraComponent;
 class UNiagaraSystem;
 class UPaperZDAnimSequence;
+class AAttackHitbox;
+
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnTrickQTEStarted, const TArray<ETrickDirection>&, Sequence);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnTrickQTEIndexChanged, int32, CompletedInputs);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnTrickQTEEnded, bool, bSuccess);
 
 /**
  * Player character Eri.
@@ -51,11 +60,26 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Homing")
 	bool IsHomingCameraLocked() const { return bHomingCameraLocked; }
 
+	UFUNCTION(BlueprintPure, Category = "Trick")
+	bool IsTrickInputLocked() const { return bTrickQTEActive || bDNAExecuting; }
+
+	UFUNCTION(BlueprintPure, Category = "Trick")
+	bool IsTrickQTEActive() const { return bTrickQTEActive; }
+
+	UFUNCTION(BlueprintPure, Category = "Trick")
+	TArray<ETrickDirection> GetTrickQTESequence() const { return TrickQTESequence; }
+
+	UFUNCTION(BlueprintPure, Category = "Trick")
+	int32 GetTrickQTEIndex() const { return TrickQTEIndex; }
+
+	void CancelDemoActions();
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
 	virtual void Tick(float DeltaTime) override;
+	virtual void Landed(const FHitResult& Hit) override;
 
 	UPROPERTY(EditAnywhere, Category = "Input Actions|Movement")
 	UInputAction* MovementAction = nullptr;
@@ -72,7 +96,7 @@ protected:
 	UPROPERTY(EditAnywhere, Category = "Input Actions|Combat")
 	UInputAction* AreaAttackAction = nullptr;
 
-	/** Air homing dash (target must be found). Separate from light attack so air combat works. */
+	/** Deprecated: air light attack starts homing. Kept for serialized BP assignments. */
 	UPROPERTY(EditAnywhere, Category = "Input Actions|Combat")
 	UInputAction* HomingAction = nullptr;
 
@@ -100,7 +124,7 @@ protected:
 	void StartYoYoAttackVFX();
 	void StopYoYoAttackVFX();
 	
-	/** Temporary looping aura used to preview Trick Mode VFX. */
+	/** Looping aura during QTE and both DNA phases. */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "VFX|Trick")
 	UNiagaraComponent* TrickAuraVFX = nullptr;
 
@@ -112,7 +136,7 @@ protected:
 	UPROPERTY(EditAnywhere, Category = "Input Actions|Debug")
 	UInputAction* TrickAuraDebugAction = nullptr;
 
-	/** Temporary debug toggle until actual Trick Mode activation is implemented. */
+	/** Unbound legacy preview toggle. Gameplay activates the aura directly. */
 	void ToggleTrickAuraVFX();
 
 	void Move(const FInputActionValue& Value);
@@ -199,6 +223,22 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Homing|Camera")
 	bool bHomingCameraLockPitch = false;
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Trick|DNA|Animation")
+	TObjectPtr<UPaperZDAnimSequence> DNAPhaseOneSequence;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Trick|DNA|Animation")
+	TObjectPtr<UPaperZDAnimSequence> DNAPhaseTwoSequence;
+
+public:
+	UPROPERTY(BlueprintAssignable, Category = "Trick|QTE")
+	FOnTrickQTEStarted OnTrickQTEStarted;
+
+	UPROPERTY(BlueprintAssignable, Category = "Trick|QTE")
+	FOnTrickQTEIndexChanged OnTrickQTEIndexChanged;
+
+	UPROPERTY(BlueprintAssignable, Category = "Trick|QTE")
+	FOnTrickQTEEnded OnTrickQTEEnded;
+
 private:
 	void SetHomingCameraLocked(bool bLocked);
 	void UpdateHomingCameraLock(float DeltaTime);
@@ -208,7 +248,9 @@ private:
 		None,
 		Thrust,
 		Orbit,
-		Homing
+		Homing,
+		DNASurround,
+		DNABurst
 	};
 
 	struct FYoYoRuntime
@@ -264,4 +306,38 @@ private:
 
 	/** Camera locked behind Eri during homing dash (back sprite only). */
 	bool bHomingCameraLocked = false;
+
+	void FailTrickQTE();
+	void SetupTrickKeyboardInput(UEnhancedInputComponent* EnhancedInput);
+	void SetTrickKeyboardContextEnabled(bool bEnabled);
+	void SubmitTrickDirection(ETrickDirection Cardinal);
+	void ResetTrickCardinal();
+	void ExitTrickModeInternal();
+	void BeginDNAPresentation(const FAttackData& InAttackData);
+	void BeginDNABurst();
+	void UpdateDNAPresentation(float DeltaTime);
+	void FinishDNAPresentation();
+	void ClearDNAHitboxes();
+	void PlayDNASequence(UPaperZDAnimSequence* Sequence, float PhaseDuration);
+	AAttackHitbox* SpawnDNAHitbox(const FAttackData& InAttackData, float AngleDegrees);
+
+	TArray<ETrickDirection> TrickQTESequence;
+	/** Per-key actions consume WASD before the shared stick action can aggregate them. */
+	UPROPERTY(Transient)
+	TObjectPtr<UInputMappingContext> TrickKeyboardContext;
+	TWeakObjectPtr<UEnhancedInputLocalPlayerSubsystem> TrickKeyboardSubsystem;
+
+	int32 TrickQTEIndex = 0;
+	ETrickDirection LastQTECardinal = ETrickDirection::None;
+	bool bTrickQTEActive = false;
+	bool bDNAExecuting = false;
+	float DNAPhaseElapsed = 0.f;
+	float DNAOrbitDuration = 1.2f;
+	float DNABurstDuration = 0.75f;
+	float DNAFlightRange = 600.f;
+	float DNAFlightSpeed = 800.f;
+	FAttackData DNAResolvedAttack;
+
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<AAttackHitbox>> DNAHitboxes;
 };

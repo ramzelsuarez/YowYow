@@ -8,10 +8,20 @@
 #include "ActorComponents/ComboComponent.h"
 #include "ActorComponents/HomingAttackComponent.h"
 #include "ActorComponents/TrickGaugeComponent.h"
+#include "Attacks/AttackHitbox.h"
+#include "DataAssets/CharacterAttackData.h"
+#include "Engine/World.h"
+#include "GameFramework/CharacterMovementComponent.h"
+#include "GameModes/SpinningRiot.h"
+#include "PlayerControllers/SpinningRiotPlayerController.h"
+#include "InputActionValue.h"
 #include "Camera/CameraComponent.h"
 #include "Components/SceneComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "EnhancedInputComponent.h"
+#include "EnhancedInputSubsystems.h"
+#include "InputAction.h"
+#include "InputMappingContext.h"
 #include "GameFramework/Controller.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "Engine/StaticMesh.h"
@@ -126,6 +136,8 @@ void AEriCharacter::BeginPlay()
 
 void AEriCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	SetTrickKeyboardContextEnabled(false);
+	ClearDNAHitboxes();
 	SetHomingCameraLocked(false);
 
 	if (AttackComponent)
@@ -154,6 +166,18 @@ void AEriCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
 void AEriCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+	if (IsDead() && IsTrickInputLocked())
+	{
+		CancelDemoActions();
+	}
+	if (bTrickQTEActive && TrickGaugeComponent)
+	{
+		TrickGaugeComponent->Drain(DeltaTime);
+		if (bTrickQTEActive && TrickGaugeComponent->IsEmpty())
+		{
+			FailTrickQTE();
+		}
+	}
 	if (PresentationMode == EYoYoPresentationMode::None)
 	{
 		AttachYoYosToHandSockets();
@@ -300,6 +324,11 @@ FVector AEriCharacter::GetRestWorldLocation(const FYoYoRuntime& Hand) const
 
 void AEriCharacter::HandleAttackStarted(EAttackType AttackType, FAttackData StartedAttackData)
 {
+	if (AttackType == EAttackType::DNA)
+	{
+		BeginDNAPresentation(StartedAttackData);
+		return;
+	}
 	switch (AttackType)
 	{
 	case EAttackType::Normal:
@@ -321,6 +350,10 @@ void AEriCharacter::HandleAttackStarted(EAttackType AttackType, FAttackData Star
 
 void AEriCharacter::HandleAttackFinished(EAttackType AttackType, bool bCompleted)
 {
+	if (AttackType == EAttackType::DNA)
+	{
+		return;
+	}
 	if (PresentationMode == EYoYoPresentationMode::None)
 	{
 		if (AttackComponent)
@@ -598,6 +631,11 @@ bool AEriCharacter::AreActiveYoYosAtTarget(bool bReturning) const
 
 void AEriCharacter::UpdateYoYoPresentation(float DeltaTime)
 {
+	if (bDNAExecuting)
+	{
+		UpdateDNAPresentation(DeltaTime);
+		return;
+	}
 	if (PresentationMode == EYoYoPresentationMode::None)
 	{
 		return;
@@ -798,6 +836,12 @@ void AEriCharacter::JumpReleased()
 
 void AEriCharacter::Look(const FInputActionValue& Value)
 {
+	if (IsDead() || IsTrickInputLocked())
+	{
+		return;
+	}
+	const ASpinningRiot* Demo = GetWorld()->GetAuthGameMode<ASpinningRiot>();
+	if (Demo && Demo->GetDemoPhase() != EDemoPhase::Combat) return;
 	// Homing only has a back-facing sprite — lock view behind Eri during the dash.
 	if (bHomingCameraLocked)
 	{
@@ -838,7 +882,7 @@ void AEriCharacter::TryAreaAttack()
 
 void AEriCharacter::TryHomingAttack()
 {
-	if (IsDead())
+	if (IsDead() || IsTrickInputLocked())
 	{
 		return;
 	}
@@ -866,31 +910,202 @@ void AEriCharacter::TryHomingAttack()
 
 void AEriCharacter::EnterTrickMode()
 {
-	if (IsDead())
+	ASpinningRiotPlayerController* TrickController = Cast<ASpinningRiotPlayerController>(GetController());
+	const ASpinningRiot* Demo = GetWorld()->GetAuthGameMode<ASpinningRiot>();
+	if (IsDead() || IsTrickInputLocked() || !TrickGaugeComponent || !TrickGaugeComponent->IsFull()
+		|| !CharacterStateComponent || !AttackComponent || !AttackData || AttackComponent->IsAttackActive()
+		|| IsYoYoPresentationActive() || !TrickController || !TrickController->CanUseTrickInputContext()
+		|| (Demo && Demo->GetDemoPhase() != EDemoPhase::Combat)
+		|| (HomingAttackComponent && HomingAttackComponent->IsHomingInFlight()))
 	{
 		return;
 	}
 
-	if (CharacterStateComponent)
+	StopJumping();
+	GetCharacterMovement()->StopMovementImmediately();
+	ConsumeMovementInputVector();
+	if (HomingAttackComponent)
 	{
-		CharacterStateComponent->SetActionState(ECharacterActionState::Trick);
+		HomingAttackComponent->CancelHomingAttack();
 	}
+	CharacterStateComponent->SetActionState(ECharacterActionState::Trick);
+	bTrickQTEActive = true;
+	TrickQTEIndex = 0;
+	ResetTrickCardinal();
+	TrickQTESequence.Reset(4);
+	for (int32 InputIndex = 0; InputIndex < 4; ++InputIndex)
+	{
+		TrickQTESequence.Add(static_cast<ETrickDirection>(FMath::RandRange(1, 4)));
+	}
+	SetTrickKeyboardContextEnabled(true);
+	TrickController->EnterTrickMode();
+	if (TrickAuraVFX)
+	{
+		TrickAuraVFX->Activate(true);
+	}
+	OnTrickQTEStarted.Broadcast(TrickQTESequence);
 }
 
 void AEriCharacter::ExitTrickMode()
 {
-	if (CharacterStateComponent)
+	if (bTrickQTEActive)
 	{
-		CharacterStateComponent->SetActionState(ECharacterActionState::Default);
+		FailTrickQTE();
 	}
 }
 
 void AEriCharacter::TryTrickInput(const FInputActionValue& Value)
 {
-	if (CharacterStateComponent && CharacterStateComponent->GetActionState() == ECharacterActionState::Trick)
+	if (!bTrickQTEActive || IsDead())
 	{
-		FVector2D TrickInputVector = Value.Get<FVector2D>();
-		(void)TrickInputVector;
+		return;
+	}
+	const FVector2D QTEVector = Value.Get<FVector2D>();
+	if (FMath::Max(FMath::Abs(QTEVector.X), FMath::Abs(QTEVector.Y)) < 0.5f)
+	{
+		ResetTrickCardinal();
+		return;
+	}
+	const ETrickDirection Cardinal = FMath::Abs(QTEVector.X) > FMath::Abs(QTEVector.Y)
+		? (QTEVector.X > 0.f ? ETrickDirection::Right : ETrickDirection::Left)
+		: (QTEVector.Y > 0.f ? ETrickDirection::Up : ETrickDirection::Down);
+	if (Cardinal == LastQTECardinal)
+	{
+		return;
+	}
+	LastQTECardinal = Cardinal;
+	SubmitTrickDirection(Cardinal);
+}
+
+void AEriCharacter::SetupTrickKeyboardInput(UEnhancedInputComponent* EnhancedInput)
+{
+	if (!TrickKeyboardContext)
+	{
+		TrickKeyboardContext = NewObject<UInputMappingContext>(this);
+		for (const FKey Key : { EKeys::W, EKeys::S, EKeys::A, EKeys::D })
+		{
+			UInputAction* KeyAction = NewObject<UInputAction>(TrickKeyboardContext);
+			KeyAction->ValueType = EInputActionValueType::Boolean;
+			KeyAction->bConsumeInput = true;
+			TrickKeyboardContext->MapKey(KeyAction, Key);
+		}
+	}
+
+	for (const FEnhancedActionKeyMapping& Mapping : TrickKeyboardContext->GetMappings())
+	{
+		const ETrickDirection Cardinal = Mapping.Key == EKeys::W ? ETrickDirection::Up
+			: Mapping.Key == EKeys::S ? ETrickDirection::Down
+			: Mapping.Key == EKeys::A ? ETrickDirection::Left : ETrickDirection::Right;
+		EnhancedInput->BindAction(Mapping.Action, ETriggerEvent::Started, this,
+			&AEriCharacter::SubmitTrickDirection, Cardinal);
+	}
+}
+
+void AEriCharacter::SetTrickKeyboardContextEnabled(const bool bEnabled)
+{
+	if (!bEnabled)
+	{
+		// EndPlay can happen after the controller has already unpossessed Eri.
+		if (UEnhancedInputLocalPlayerSubsystem* PreviousSubsystem = TrickKeyboardSubsystem.Get())
+		{
+			PreviousSubsystem->RemoveMappingContext(TrickKeyboardContext);
+		}
+		TrickKeyboardSubsystem.Reset();
+		return;
+	}
+
+	const APlayerController* PlayerController = Cast<APlayerController>(GetController());
+	const ULocalPlayer* LocalPlayer = PlayerController ? PlayerController->GetLocalPlayer() : nullptr;
+	UEnhancedInputLocalPlayerSubsystem* InputSubsystem = LocalPlayer
+		? LocalPlayer->GetSubsystem<UEnhancedInputLocalPlayerSubsystem>() : nullptr;
+	if (!InputSubsystem || !TrickKeyboardContext)
+	{
+		return;
+	}
+
+	TrickKeyboardSubsystem = InputSubsystem;
+	FModifyContextOptions Options;
+	// Preserve the held Trick button when the contexts are rebuilt together.
+	Options.bIgnoreAllPressedKeysUntilRelease = false;
+	// TrickModeIMC has priority 10. Consume only WASD; keep its stick mappings intact.
+	InputSubsystem->AddMappingContext(TrickKeyboardContext, 11, Options);
+}
+
+void AEriCharacter::SubmitTrickDirection(const ETrickDirection Cardinal)
+{
+	if (!bTrickQTEActive || IsDead())
+	{
+		return;
+	}
+	if (!TrickQTESequence.IsValidIndex(TrickQTEIndex) || TrickQTESequence[TrickQTEIndex] != Cardinal)
+	{
+		FailTrickQTE();
+		return;
+	}
+	++TrickQTEIndex;
+	OnTrickQTEIndexChanged.Broadcast(TrickQTEIndex);
+	if (TrickQTEIndex == 4 && bTrickQTEActive)
+	{
+		bTrickQTEActive = false;
+		bDNAExecuting = true;
+		TrickGaugeComponent->EmptyGauge();
+		OnTrickQTEEnded.Broadcast(true);
+		if (!DoAttack(EAttackType::DNA))
+		{
+			bDNAExecuting = false;
+			ExitTrickModeInternal();
+			UE_LOG(LogTemp, Warning, TEXT("%s could not start DNA."), *GetName());
+		}
+	}
+}
+
+void AEriCharacter::ResetTrickCardinal()
+{
+	LastQTECardinal = ETrickDirection::None;
+}
+
+void AEriCharacter::FailTrickQTE()
+{
+	if (!bTrickQTEActive)
+	{
+		return;
+	}
+	bTrickQTEActive = false;
+	if (TrickGaugeComponent)
+	{
+		TrickGaugeComponent->EmptyGauge();
+	}
+	OnTrickQTEEnded.Broadcast(false);
+	ExitTrickModeInternal();
+}
+
+void AEriCharacter::ExitTrickModeInternal()
+{
+	SetTrickKeyboardContextEnabled(false);
+	bTrickQTEActive = false;
+	TrickQTESequence.Reset();
+	TrickQTEIndex = 0;
+	ResetTrickCardinal();
+	if (CharacterStateComponent)
+	{
+		CharacterStateComponent->SetActionState(ECharacterActionState::Default);
+	}
+	if (ASpinningRiotPlayerController* TrickController = Cast<ASpinningRiotPlayerController>(GetController()))
+	{
+		TrickController->ExitTrickMode();
+	}
+	if (TrickAuraVFX)
+	{
+		TrickAuraVFX->Deactivate();
+	}
+}
+
+void AEriCharacter::Landed(const FHitResult& Hit)
+{
+	Super::Landed(Hit);
+	if (HomingAttackComponent && HomingAttackComponent->IsHomingInFlight())
+	{
+		HomingAttackComponent->CancelHomingAttack();
 	}
 }
 
@@ -992,6 +1207,7 @@ void AEriCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompon
 
 	if (UEnhancedInputComponent* EnhancedInputComponent = Cast<UEnhancedInputComponent>(PlayerInputComponent))
 	{
+		SetupTrickKeyboardInput(EnhancedInputComponent);
 		if (MovementAction)
 		{
 			EnhancedInputComponent->BindAction(MovementAction, ETriggerEvent::Triggered, this, &AEriCharacter::Move);
@@ -1022,19 +1238,13 @@ void AEriCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompon
 			EnhancedInputComponent->BindAction(AreaAttackAction, ETriggerEvent::Started, this, &AEriCharacter::TryAreaAttack);
 		}
 
-		// Optional dedicated homing button. Attack in air+target still homes if this is unset.
-		if (HomingAction)
-		{
-			EnhancedInputComponent->BindAction(HomingAction, ETriggerEvent::Started, this, &AEriCharacter::TryHomingAttack);
-		}
-
 		if (TrickModeAction)
 		{
 			EnhancedInputComponent->BindAction(TrickModeAction, ETriggerEvent::Started, this, &AEriCharacter::EnterTrickMode);
 			EnhancedInputComponent->BindAction(TrickModeAction, ETriggerEvent::Completed, this, &AEriCharacter::ExitTrickMode);
+			EnhancedInputComponent->BindAction(TrickModeAction, ETriggerEvent::Canceled, this, &AEriCharacter::ExitTrickMode);
 		}
 		
-		//debug
 		if (TrickInputAction)
 		{
 			EnhancedInputComponent->BindAction(
@@ -1043,17 +1253,8 @@ void AEriCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompon
 			   this,
 			   &AEriCharacter::TryTrickInput
 			);
-		}
-
-		// Temporary Trick Aura VFX debug input.
-		if (TrickAuraDebugAction)
-		{
-			EnhancedInputComponent->BindAction(
-			   TrickAuraDebugAction,
-			   ETriggerEvent::Started,
-			   this,
-			   &AEriCharacter::ToggleTrickAuraVFX
-			);
+			EnhancedInputComponent->BindAction(TrickInputAction, ETriggerEvent::Completed, this, &AEriCharacter::ResetTrickCardinal);
+			EnhancedInputComponent->BindAction(TrickInputAction, ETriggerEvent::Canceled, this, &AEriCharacter::ResetTrickCardinal);
 		}
 	}
 	else

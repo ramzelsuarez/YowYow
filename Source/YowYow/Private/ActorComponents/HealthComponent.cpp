@@ -2,6 +2,9 @@
 
 
 #include "ActorComponents/HealthComponent.h"
+#include "GameFramework/Pawn.h"
+#include "Engine/World.h"
+#include "GameModes/SpinningRiot.h"
 
 UHealthComponent::UHealthComponent()
 {
@@ -46,7 +49,9 @@ void UHealthComponent::HandleOwnerTakeAnyDamage(
 	AActor* DamageCauser
 )
 {
-	if (!DamagedActor || bIsDead || Damage <= 0.f)
+	const ASpinningRiot* Demo = GetWorld() ? GetWorld()->GetAuthGameMode<ASpinningRiot>() : nullptr;
+	if (!DamagedActor || bIsDead || Damage <= 0.f || IsInvulnerable()
+		|| (Demo && Demo->GetDemoPhase() != EDemoPhase::Combat))
 	{
 		return;
 	}
@@ -61,6 +66,13 @@ void UHealthComponent::HandleOwnerTakeAnyDamage(
 		return;
 	}
 
+	if (const APawn* HealthPawn = Cast<APawn>(GetOwner()))
+	{
+		if (HealthPawn->IsPlayerControlled() && GetWorld())
+		{
+			InvulnerableUntil = GetWorld()->GetTimeSeconds() + FMath::Max(InvulnDuration, 0.f);
+		}
+	}
 	OnHealthChanged.Broadcast(this, CurrentHealth, MaxHealth, static_cast<float>(-AppliedDamage));
 	OnHealthDamageTaken.Broadcast(
 		this,
@@ -75,4 +87,11 @@ void UHealthComponent::HandleOwnerTakeAnyDamage(
 		bIsDead = true;
 		OnHealthDepleted.Broadcast(this, DamageCauser);
 	}
+}
+
+bool UHealthComponent::IsInvulnerable() const
+{
+	const APawn* HealthPawn = Cast<APawn>(GetOwner());
+	return HealthPawn && HealthPawn->IsPlayerControlled() && GetWorld()
+		&& GetWorld()->GetTimeSeconds() < InvulnerableUntil;
 }

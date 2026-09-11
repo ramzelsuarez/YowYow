@@ -65,6 +65,9 @@ public:
 	UFUNCTION(BlueprintPure)
 	bool IsDead() const { return bIsDead; }
 
+	UFUNCTION(BlueprintPure, Category = "Health")
+	bool IsInvulnerable() const;
+
 	UFUNCTION(BlueprintCallable)
 	void Heal(int32 Amount);
 
@@ -89,4 +92,10 @@ private:
 
 protected:
 	virtual void BeginPlay() override;
+
+private:
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Health|Player", meta = (AllowPrivateAccess = "true", ClampMin = "0.0"))
+	float InvulnDuration = 0.8f;
+
+	double InvulnerableUntil = 0.0;
 };

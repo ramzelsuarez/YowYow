@@ -100,7 +100,7 @@ protected:
 	TArray<FComboTierDef> Tiers;
 
 	UPROPERTY(EditAnywhere, Category = "Combo|Debug")
-	bool bDebugDrawCombo = true;
+	bool bDebugDrawCombo = false;
 
 private:
 	void BuildDefaultTiers();

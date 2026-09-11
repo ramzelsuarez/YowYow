@@ -11,6 +11,9 @@
 class AWaveEnemyManager;
 class UHealthComponent;
 class AHealthItem;
+class USceneComponent;
+class UWidgetComponent;
+class UUserWidget;
 
 /**
  * Self explanatory class for all enemies (we will figure out later if a ABossCharacter inheriting from this one is really necessary)
@@ -24,6 +27,7 @@ class YOWYOW_API AEnemyCharacter : public ACharacterBase, public IHomingable, pu
 	GENERATED_BODY()
 
 public:
+	AEnemyCharacter();
 	virtual bool GetIsHomingTargeted_Implementation() override;
 	virtual void SetHomingTargeted_Implementation(bool bTargeted) override;
 	virtual bool CanBeHomed_Implementation() const override;
@@ -47,6 +51,15 @@ protected:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Drops")
 	FVector HealthDropOffset = FVector(0.f, 0.f, 50.f);
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Homing|Marker")
+	TObjectPtr<USceneComponent> HomingTargetMarker;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Homing|Marker")
+	TObjectPtr<UWidgetComponent> HomingMarkerWidget;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Homing|Marker")
+	TSubclassOf<UUserWidget> HomingMarkerWidgetClass;
 
 private:
 	bool bIsHomingTargeted = false;

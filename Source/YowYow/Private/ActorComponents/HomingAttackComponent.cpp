@@ -14,6 +14,7 @@
 #include "Kismet/KismetSystemLibrary.h"
 #include "TimerManager.h"
 #include "Engine/World.h"
+#include "GameModes/SpinningRiot.h"
 
 UHomingAttackComponent::UHomingAttackComponent()
 {
@@ -29,6 +30,7 @@ bool UHomingAttackComponent::CanSearchTargets()
 
 	return OwnerStateComponent->GetLocomotionState() == ECharacterLocomotionState::Airborne &&
 		OwnerStateComponent->GetLifeState() != ECharacterLifeState::Dead &&
+		OwnerStateComponent->GetActionState() != ECharacterActionState::Trick &&
 		(HomingState == EHomingState::Idle ||
 			HomingState == EHomingState::Searching ||
 			HomingState == EHomingState::TargetFound);
@@ -186,6 +188,10 @@ void UHomingAttackComponent::ApplyHomingHitDamage()
 
 	const bool bGrantsCombo =
 		CurrentTarget->Implements<UComboable>() && IComboable::Execute_CanGrantCombo(CurrentTarget);
+	if (bGrantsCombo)
+	{
+		UComboComponent::NotifyHit(OwnerCharacter, CurrentTarget);
+	}
 
 	UGameplayStatics::ApplyDamage(
 		CurrentTarget,
@@ -195,10 +201,6 @@ void UHomingAttackComponent::ApplyHomingHitDamage()
 		nullptr
 	);
 
-	if (bGrantsCombo)
-	{
-		UComboComponent::NotifyHit(OwnerCharacter, CurrentTarget);
-	}
 }
 
 void UHomingAttackComponent::FinishHomingAttack()
@@ -366,9 +368,11 @@ void UHomingAttackComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 
 	const bool bCanHomingExist =
 		OwnerStateComponent->GetLocomotionState() == ECharacterLocomotionState::Airborne &&
-		OwnerStateComponent->GetLifeState() != ECharacterLifeState::Dead;
+		OwnerStateComponent->GetLifeState() != ECharacterLifeState::Dead &&
+		OwnerStateComponent->GetActionState() != ECharacterActionState::Trick;
+	const ASpinningRiot* Demo = GetWorld()->GetAuthGameMode<ASpinningRiot>();
 
-	if (!bCanHomingExist)
+	if (!bCanHomingExist || (Demo && Demo->GetDemoPhase() != EDemoPhase::Combat))
 	{
 		if (IsHomingInFlight() || HomingState == EHomingState::Charging)
 		{

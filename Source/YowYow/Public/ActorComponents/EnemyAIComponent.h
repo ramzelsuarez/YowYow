@@ -78,4 +78,13 @@ private:
 	bool CanAttack() const;
 	void FacePlayer();
 	void ReleaseAttackToken();
+
+	UPROPERTY(EditAnywhere, Category = "Enemy AI|Ranged")
+	bool bUseRangedAttack = false;
+
+	UPROPERTY(EditAnywhere, Category = "Enemy AI|Ranged", meta = (ClampMin = "1.0"))
+	float RangedAttackRange = 600.f;
+
+	UPROPERTY(EditAnywhere, Category = "Enemy AI|Ranged", meta = (ClampMin = "0.0"))
+	float RangedStopDistance = 450.f;
 };

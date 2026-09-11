@@ -14,6 +14,8 @@
 #include "PaperFlipbookComponent.h"
 #include "ActorComponents/CharacterStateComponent.h"
 #include "Camera/CameraShakeBase.h"
+#include "GameModes/SpinningRiot.h"
+#include "Engine/World.h"
 
 ACharacterBase::ACharacterBase()
 {
@@ -81,6 +83,9 @@ float ACharacterBase::TakeDamage(
 	AActor* DamageCauser
 )
 {
+	const ASpinningRiot* Demo = GetWorld()->GetAuthGameMode<ASpinningRiot>();
+	if ((Demo && Demo->GetDemoPhase() != EDemoPhase::Combat)
+		|| (HealthComponent && HealthComponent->IsInvulnerable())) return 0.f;
 	if (HealthComponent && HealthComponent->IsDead())
 	{
 		return 0.f;
@@ -122,6 +127,10 @@ void ACharacterBase::DoMove(float Right, float Forward)
 
 bool ACharacterBase::DoAttack(EAttackType AttackType)
 {
+	const ASpinningRiot* Demo = GetWorld()->GetAuthGameMode<ASpinningRiot>();
+	if (Demo && Demo->GetDemoPhase() != EDemoPhase::Combat) return false;
+	if (CharacterStateComponent && CharacterStateComponent->GetActionState() == ECharacterActionState::Trick
+		&& AttackType != EAttackType::DNA) return false;
 	if (!AttackComponent)
 	{
 		return false;
@@ -167,6 +176,9 @@ void ACharacterBase::StopJumping()
 
 bool ACharacterBase::CanMove()
 {
+	const ASpinningRiot* Demo = GetWorld()->GetAuthGameMode<ASpinningRiot>();
+	if (Demo && Demo->GetDemoPhase() != EDemoPhase::Combat) return false;
+	if (CharacterStateComponent && CharacterStateComponent->GetActionState() == ECharacterActionState::Trick) return false;
 	if (IsDead())
 	{
 		return false;
@@ -261,9 +273,9 @@ void ACharacterBase::HandleHealthDepleted(UHealthComponent* InHealthComponent, A
 	if (IsPlayerControlled())
 	{
 		UEnemyAIComponent::SetGlobalAIFrozen(true);
-		if (ASpinningRiotPlayerController* PlayerController = Cast<ASpinningRiotPlayerController>(GetController()))
+		if (ASpinningRiot* Demo = GetWorld()->GetAuthGameMode<ASpinningRiot>())
 		{
-			PlayerController->OpenPauseMenuOnDeath();
+			Demo->HandlePlayerDied();
 		}
 	}
 }

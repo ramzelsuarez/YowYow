@@ -1,6 +1,8 @@
 #include "ActorComponents/ComboComponent.h"
 
 #include "ActorComponents/HealthComponent.h"
+#include "ActorComponents/CharacterStateComponent.h"
+#include "ActorComponents/TrickGaugeComponent.h"
 #include "Engine/Engine.h"
 #include "Interfaces/Comboable.h"
 #include "UObject/Class.h"
@@ -68,6 +70,15 @@ void UComboComponent::NotifyHit(AActor* InstigatorPawn, AActor* HitActor)
 	if (UComboComponent* Combo = InstigatorPawn->FindComponentByClass<UComboComponent>())
 	{
 		Combo->RegisterHit(Combo->GetHitPoints());
+	}
+	const UCharacterStateComponent* State = InstigatorPawn->FindComponentByClass<UCharacterStateComponent>();
+	const UHealthComponent* Health = InstigatorPawn->FindComponentByClass<UHealthComponent>();
+	if ((!State || State->GetActionState() != ECharacterActionState::Trick) && (!Health || !Health->IsDead()))
+	{
+		if (UTrickGaugeComponent* Gauge = InstigatorPawn->FindComponentByClass<UTrickGaugeComponent>())
+		{
+			Gauge->FillFromHit();
+		}
 	}
 }
 

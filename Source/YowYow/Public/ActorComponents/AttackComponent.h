@@ -59,6 +59,8 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Combat|YoYo")
 	void NotifyPresentationComplete();
 
+	void CancelActiveAttack();
+
 	UFUNCTION(BlueprintPure, Category = "Combat")
 	bool IsAttackActive() const;
 

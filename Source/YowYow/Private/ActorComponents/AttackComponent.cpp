@@ -12,6 +12,8 @@
 #include "GameFramework/Character.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "TimerManager.h"
+#include "Kismet/GameplayStatics.h"
+#include "GameModes/SpinningRiot.h"
 
 UAttackComponent::UAttackComponent()
 {
@@ -29,6 +31,11 @@ bool UAttackComponent::TryAttack(EAttackType AttackType)
 	{
 		return false;
 	}
+	const ASpinningRiot* Demo = GetWorld()->GetAuthGameMode<ASpinningRiot>();
+	if (Demo && Demo->GetDemoPhase() != EDemoPhase::Combat) return false;
+	const UCharacterStateComponent* OwnerState = GetOwner()->FindComponentByClass<UCharacterStateComponent>();
+	if (OwnerState && OwnerState->GetActionState() == ECharacterActionState::Trick
+		&& AttackType != EAttackType::DNA) return false;
 
 	// Buffer while hit window / recovery / yoyo return is still busy.
 	if (!CanStartAttack())
@@ -97,6 +104,7 @@ void UAttackComponent::SetRequiresPresentationComplete(bool bRequires)
 
 void UAttackComponent::NotifyPresentationComplete()
 {
+	const bool bFinishedDNA = ActiveAttackType == EAttackType::DNA;
 	bPresentationBlocking = false;
 
 	// Yoyo may finish return before the hitbox window closes — wait for both.
@@ -115,9 +123,40 @@ void UAttackComponent::NotifyPresentationComplete()
 	}
 
 	ActiveAttackType = EAttackType::None;
+	if (bFinishedDNA)
+	{
+		OnAttackFinished.Broadcast(EAttackType::DNA, true);
+	}
 
 	// Buffered input pressed during go/return fires here (next Normal index).
 	TryConsumeBufferedAttack();
+}
+
+void UAttackComponent::CancelActiveAttack()
+{
+	const EAttackType CanceledType = ActiveAttackType;
+	bHasBufferedAttack = false;
+	if (GetWorld())
+	{
+		GetWorld()->GetTimerManager().ClearTimer(RecoveryTimer);
+	}
+	for (AAttackHitbox* Hitbox : ActiveHitboxes)
+	{
+		if (IsValid(Hitbox))
+		{
+			Hitbox->OnFinished.RemoveAll(this);
+			Hitbox->Destroy();
+		}
+	}
+	ActiveHitboxes.Reset();
+	PendingHitboxes = 0;
+	bPresentationBlocking = false;
+	ResetNormalCombo();
+	CompleteAttackCycle(false);
+	if (CanceledType != EAttackType::None)
+	{
+		OnAttackFinished.Broadcast(CanceledType, false);
+	}
 }
 
 void UAttackComponent::BeginPlay()
@@ -146,6 +185,8 @@ bool UAttackComponent::CanStartAttack() const
 	{
 		return false;
 	}
+	const ASpinningRiot* Demo = GetWorld()->GetAuthGameMode<ASpinningRiot>();
+	if (Demo && Demo->GetDemoPhase() != EDemoPhase::Combat) return false;
 
 	if (const UHealthComponent* Health = GetOwner()->FindComponentByClass<UHealthComponent>())
 	{
@@ -185,6 +226,8 @@ const FAttackData* UAttackComponent::GetAttackData(EAttackType AttackType) const
 		return &CharacterAttackData->Normal[NormalAttackIndex % CharacterAttackData->Normal.Num()];
 	case EAttackType::Area:
 		return &CharacterAttackData->Area;
+	case EAttackType::DNA:
+		return &CharacterAttackData->DNA;
 	case EAttackType::Ranged:
 	default:
 		return nullptr;
@@ -256,6 +299,22 @@ bool UAttackComponent::SpawnHitbox(const FAttackData& AttackData, USceneComponen
 
 bool UAttackComponent::ExecuteMeleeAttack(const FAttackData& AttackData, EAttackType AttackType)
 {
+	if (AttackType == EAttackType::DNA)
+	{
+		if (!bRequiresPresentationComplete || !OnAttackStarted.IsBound())
+		{
+			return false;
+		}
+		ActiveAttackType = EAttackType::DNA;
+		ActiveRecoveryTime = 0.f;
+		bHasBufferedAttack = false;
+		bPresentationBlocking = true;
+		SetAttackingStates(true);
+		ApplyAttackFacingLock(true);
+		OnAttackStarted.Broadcast(AttackType, AttackData);
+		return bPresentationBlocking;
+	}
+
 	FAttackData ResolvedAttack = AttackData;
 	if (ResolvedAttack.HitboxRadius <= 0.f)
 	{
@@ -357,10 +416,13 @@ bool UAttackComponent::ExecuteRangedAttack(const FRangedAttackData& AttackData)
 	SpawnParameters.Instigator = Cast<APawn>(GetOwner());
 	SpawnParameters.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 
+	const APawn* RangedTarget = UGameplayStatics::GetPlayerPawn(this, 0);
+	const FRotator ProjectileRotation = RangedTarget && RangedTarget != GetOwner()
+		? (RangedTarget->GetActorLocation() - SpawnLocation).Rotation() : GetOwner()->GetActorRotation();
 	AActor* SpawnedProjectile = GetWorld()->SpawnActor<AActor>(
 		AttackData.Projectile,
 		SpawnLocation,
-		GetOwner()->GetActorRotation(),
+		ProjectileRotation,
 		SpawnParameters
 	);
 

@@ -6,6 +6,9 @@
 #include "Kismet/GameplayStatics.h"
 #include "BattleSystem/WaveEnemyManager.h"
 #include "TimerManager.h"
+#include "GameFramework/CharacterMovementComponent.h"
+#include "GameModes/SpinningRiot.h"
+#include "Engine/World.h"
 
 bool UEnemyAIComponent::bGlobalAIFrozen = false;
 
@@ -53,6 +56,9 @@ void UEnemyAIComponent::BeginPlay()
 void UEnemyAIComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+	if (!IsValid(PlayerPawn)) PlayerPawn = UGameplayStatics::GetPlayerPawn(this, 0);
+	const ASpinningRiot* Demo = GetWorld()->GetAuthGameMode<ASpinningRiot>();
+	if (Demo && Demo->GetDemoPhase() != EDemoPhase::Combat) return;
 
 	if (bGlobalAIFrozen)
 	{
@@ -149,6 +155,43 @@ void UEnemyAIComponent::UpdateAI(float DeltaTime)
 	}
 
 	FacePlayer();
+
+	if (bUseRangedAttack)
+	{
+		const float ShotRange = FMath::Max(RangedAttackRange, 1.f);
+		const float StopDistance = FMath::Clamp(RangedStopDistance, 0.f, ShotRange);
+		if (DistanceToPlayer > ShotRange)
+		{
+			const FVector ChaseDirection = (PlayerLocation - EnemyLocation).GetSafeNormal();
+			const float ChaseStep = FMath::Min(FMath::Max(MoveSpeed * DeltaTime, 0.f), DistanceToPlayer - StopDistance);
+			OwnerCharacter->AddActorWorldOffset(ChaseDirection * ChaseStep, true);
+			return;
+		}
+		OwnerCharacter->GetCharacterMovement()->StopMovementImmediately();
+		if (!CanAttack()) return;
+		const bool bHasRangedToken = !WaveManager || WaveManager->RequestAttackToken(OwnerCharacter);
+		if (!bHasRangedToken) return;
+		LastAttackTime = GetWorld()->GetTimeSeconds();
+		if (OwnerCharacter->DoAttack(EAttackType::Ranged))
+		{
+			if (TokenReleaseDelay > 0.f)
+			{
+				GetWorld()->GetTimerManager().SetTimer(AttackTokenReleaseTimerHandle, this,
+					&UEnemyAIComponent::ReleaseAttackToken, TokenReleaseDelay, false);
+			}
+			else ReleaseAttackToken();
+		}
+		else
+		{
+			ReleaseAttackToken();
+			if (!bLoggedMissingAttackSetup)
+			{
+				bLoggedMissingAttackSetup = true;
+				UE_LOG(LogTemp, Warning, TEXT("%s Ranged attack failed; assign AttackData.Ranged.Projectile."), *OwnerCharacter->GetName());
+			}
+		}
+		return;
+	}
 
 	if (DistanceToPlayer <= AttackRange)
 	{
