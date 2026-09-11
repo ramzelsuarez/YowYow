@@ -9,6 +9,9 @@
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "InputAction.h"
+#include "GameModes/SpinningRiot.h"
+#include "Engine/World.h"
+#include "TimerManager.h"
 
 void ASpinningRiotPlayerController::BeginPlay()
 {
@@ -23,15 +26,15 @@ void ASpinningRiotPlayerController::BeginPlay()
 	bShowMouseCursor = false;
 	SetInputMode(FInputModeGameOnly());
 
-	if (!GameplayIMC)
-	{
-		return;
-	}
-
 	Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(GetLocalPlayer());
-	if (Subsystem)
+	if (Subsystem && TrickModeIMC) Subsystem->RemoveMappingContext(TrickModeIMC);
+	if (Subsystem && GameplayIMC)
 	{
 		Subsystem->AddMappingContext(GameplayIMC, 0);
+	}
+	if (ASpinningRiot* Demo = GetWorld()->GetAuthGameMode<ASpinningRiot>())
+	{
+		Demo->RefreshDemoInput();
 	}
 }
 
@@ -58,12 +61,13 @@ void ASpinningRiotPlayerController::SetupInputComponent()
 
 void ASpinningRiotPlayerController::ToggleEnemyAI()
 {
+	if (!IsCombatPhase()) return;
 	UEnemyAIComponent::ToggleGlobalAIFrozen();
 }
 
 void ASpinningRiotPlayerController::TogglePauseMenu()
 {
-	if (IsPossessedPawnDead())
+	if (IsPossessedPawnDead() || !IsCombatPhase())
 	{
 		return;
 	}
@@ -80,31 +84,26 @@ void ASpinningRiotPlayerController::TogglePauseMenu()
 
 void ASpinningRiotPlayerController::OpenPauseMenuOnDeath()
 {
-	if (bPauseMenuOpen)
-	{
-		return;
-	}
+	// Deprecated Blueprint entry point. Death UI is owned by the demo GameMode.
+}
 
-	if (DeathPauseMenuDelay <= 0.f)
+void ASpinningRiotPlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	GetWorldTimerManager().ClearTimer(DeathPauseMenuTimerHandle);
+	if (PauseMenuWidget) PauseMenuWidget->RemoveFromParent();
+	if (Subsystem)
 	{
-		OpenPauseMenu();
-		return;
+		if (TrickModeIMC) Subsystem->RemoveMappingContext(TrickModeIMC);
+		if (GameplayIMC) Subsystem->RemoveMappingContext(GameplayIMC);
 	}
-
-	GetWorldTimerManager().SetTimer(
-		DeathPauseMenuTimerHandle,
-		this,
-		&ASpinningRiotPlayerController::OpenPauseMenu,
-		DeathPauseMenuDelay,
-		false
-	);
+	Super::EndPlay(EndPlayReason);
 }
 
 void ASpinningRiotPlayerController::OpenPauseMenu()
 {
 	GetWorldTimerManager().ClearTimer(DeathPauseMenuTimerHandle);
 
-	if (bPauseMenuOpen || !PauseMenuClass)
+	if (bPauseMenuOpen || !PauseMenuClass || IsPossessedPawnDead() || !IsCombatPhase())
 	{
 		return;
 	}
@@ -128,7 +127,7 @@ void ASpinningRiotPlayerController::OpenPauseMenu()
 
 void ASpinningRiotPlayerController::ClosePauseMenu()
 {
-	if (IsPossessedPawnDead())
+	if (IsPossessedPawnDead() || !IsCombatPhase())
 	{
 		return;
 	}
@@ -159,9 +158,12 @@ bool ASpinningRiotPlayerController::IsPossessedPawnDead() const
 
 void ASpinningRiotPlayerController::EnterTrickMode() const
 {
-	if (Subsystem && TrickModeIMC)
+	if (CanUseTrickInputContext())
 	{
-		Subsystem->AddMappingContext(TrickModeIMC, 10);
+		FModifyContextOptions Options;
+		Options.bIgnoreAllPressedKeysUntilRelease = false;
+		Subsystem->RemoveMappingContext(GameplayIMC, Options);
+		Subsystem->AddMappingContext(TrickModeIMC, 10, Options);
 	}
 }
 
@@ -170,5 +172,46 @@ void ASpinningRiotPlayerController::ExitTrickMode() const
 	if (Subsystem && TrickModeIMC)
 	{
 		Subsystem->RemoveMappingContext(TrickModeIMC);
+		if (GameplayIMC && IsCombatPhase()) Subsystem->AddMappingContext(GameplayIMC, 0);
+	}
+}
+
+bool ASpinningRiotPlayerController::CanUseTrickInputContext() const
+{
+	return Subsystem && GameplayIMC && TrickModeIMC && GameplayIMC != TrickModeIMC;
+}
+
+bool ASpinningRiotPlayerController::IsCombatPhase() const
+{
+	const ASpinningRiot* Demo = GetWorld() ? GetWorld()->GetAuthGameMode<ASpinningRiot>() : nullptr;
+	return !Demo || Demo->GetDemoPhase() == EDemoPhase::Combat;
+}
+
+void ASpinningRiotPlayerController::ApplyDemoInputMode(bool bCombat, UUserWidget* PhaseWidget)
+{
+	if (!IsLocalPlayerController()) return;
+	GetWorldTimerManager().ClearTimer(DeathPauseMenuTimerHandle);
+	if (PauseMenuWidget)
+	{
+		PauseMenuWidget->RemoveFromParent();
+		PauseMenuWidget = nullptr;
+	}
+	if (bPauseMenuOpen) SetPause(false);
+	bPauseMenuOpen = false;
+	ResetIgnoreMoveInput();
+	ResetIgnoreLookInput();
+	SetIgnoreMoveInput(!bCombat);
+	SetIgnoreLookInput(!bCombat);
+	bShowMouseCursor = !bCombat;
+	if (bCombat)
+	{
+		SetInputMode(FInputModeGameOnly());
+	}
+	else
+	{
+		FInputModeUIOnly InputMode;
+		if (PhaseWidget) InputMode.SetWidgetToFocus(PhaseWidget->TakeWidget());
+		InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+		SetInputMode(InputMode);
 	}
 }

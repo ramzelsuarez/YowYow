@@ -1,10 +1,14 @@
 #include "Attacks/AttackHitbox.h"
 
+#include "ActorComponents/ComboComponent.h"
+#include "ActorComponents/HealthComponent.h"
+#include "GameModes/SpinningRiot.h"
 #include "Combat/CombatImpactLibrary.h"
 #include "Components/SceneComponent.h"
 #include "DrawDebugHelpers.h"
 #include "Engine/World.h"
 #include "GameFramework/Pawn.h"
+#include "Interfaces/Comboable.h"
 #include "Kismet/GameplayStatics.h"
 
 namespace AttackHitboxDefaults
@@ -121,6 +125,41 @@ void AAttackHitbox::Tick(float DeltaTime)
 	default:
 		TickArcSweep(DeltaTime);
 		break;
+	}
+}
+
+void AAttackHitbox::InitializeDNA(AActor* InSourceActor, const FAttackData& InAttackData, float InitialAngleDegrees)
+{
+	SourceActor = InSourceActor;
+	AttackData = InAttackData;
+	Motion = InAttackData.Motion;
+	HitboxRadius = FMath::Max(InAttackData.HitboxRadius, 1.f);
+	OrbitAngleDegrees = InitialAngleDegrees;
+	ArcCenter = GetSourceLocation() + FVector::UpVector * AttackHitboxDefaults::TraceHeight;
+	AttackForward = FVector(FMath::Cos(FMath::DegreesToRadians(InitialAngleDegrees)),
+		FMath::Sin(FMath::DegreesToRadians(InitialAngleDegrees)), 0.f);
+	SetActorLocation(Motion == EAttackMotion::OrbitOwner
+		? ArcCenter + AttackForward * FMath::Max(AttackData.Range, 1.f) : ArcCenter);
+	SetActorTickEnabled(false);
+}
+
+void AAttackHitbox::UpdateDNAMotion(float PhaseElapsed)
+{
+	if (!SourceActor.IsValid() || bFinished)
+	{
+		return;
+	}
+	const float SafeRange = FMath::Max(AttackData.Range, 1.f);
+	const float SafeSpeed = FMath::Max(AttackData.Speed, 1.f);
+	if (Motion == EAttackMotion::OrbitOwner)
+	{
+		const float Angle = FMath::DegreesToRadians(OrbitAngleDegrees) + PhaseElapsed * SafeSpeed / SafeRange;
+		const FVector Center = GetSourceLocation() + FVector::UpVector * AttackHitboxDefaults::TraceHeight;
+		MoveAndTrace(Center + FVector(FMath::Cos(Angle), FMath::Sin(Angle), 0.f) * SafeRange, true);
+	}
+	else if (Motion == EAttackMotion::RadialBurst)
+	{
+		MoveAndTrace(ArcCenter + AttackForward * FMath::Min(PhaseElapsed * SafeSpeed, SafeRange), true);
 	}
 }
 
@@ -288,6 +327,7 @@ void AAttackHitbox::TraceHits(const FVector& Start, const FVector& End)
 
 	for (const FHitResult& Hit : Hits)
 	{
+		if (IsActorBeingDestroyed()) return;
 		AActor* HitActor = Hit.GetActor();
 		if (!IsValid(HitActor) || HitActor == SourceActor.Get() || HitActors.Contains(HitActor))
 		{
@@ -305,9 +345,22 @@ void AAttackHitbox::HandleHit(AActor* HitActor)
 	{
 		return;
 	}
+	const ASpinningRiot* Demo = GetWorld()->GetAuthGameMode<ASpinningRiot>();
+	if (Demo && Demo->GetDemoPhase() != EDemoPhase::Combat) return;
+	if (const UHealthComponent* HitHealth = HitActor->FindComponentByClass<UHealthComponent>())
+	{
+		if (HitHealth->IsDead() || HitHealth->IsInvulnerable()) return;
+	}
 
 	APawn* InstigatorPawn = Cast<APawn>(SourceActor.Get());
 	AController* InstigatorController = InstigatorPawn ? InstigatorPawn->GetController() : nullptr;
+
+	const bool bGrantsCombo =
+		HitActor->Implements<UComboable>() && IComboable::Execute_CanGrantCombo(HitActor);
+	if (bGrantsCombo)
+	{
+		UComboComponent::NotifyHit(SourceActor.Get(), HitActor);
+	}
 
 	UGameplayStatics::ApplyDamage(
 		HitActor,
@@ -316,6 +369,9 @@ void AAttackHitbox::HandleHit(AActor* HitActor)
 		SourceActor.Get(),
 		nullptr
 	);
+
+	if (IsActorBeingDestroyed() || !IsValid(HitActor) || !SourceActor.IsValid()) return;
+	if (Demo && Demo->GetDemoPhase() != EDemoPhase::Combat) return;
 
 	// Away from attacker (horizontal). Works for player hits on enemies and vice versa.
 	FVector KnockbackDir = HitActor->GetActorLocation() - SourceActor->GetActorLocation();

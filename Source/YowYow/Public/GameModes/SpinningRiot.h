@@ -4,15 +4,20 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/GameModeBase.h"
+#include "Types/ComboTypes.h"
 #include "SpinningRiot.generated.h"
 
 class AWaveEnemyManager;
+class UUserWidget;
 
 UENUM(BlueprintType)
 enum class EDemoPhase : uint8
 {
 	Combat UMETA(DisplayName = "Combat"),
-	Puzzle UMETA(DisplayName = "Puzzle"),
+	Puzzle UMETA(DisplayName = "Puzzle (Deprecated)"), // Retained serialized value; never entered.
+	Tutorial UMETA(DisplayName = "Tutorial"),
+	GameWon UMETA(DisplayName = "Game Won"),
+	GameOver UMETA(DisplayName = "Game Over"),
 };
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(
@@ -37,6 +42,23 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "Demo")
 	FOnDemoPhaseChanged OnDemoPhaseChanged;
 
+	UFUNCTION(BlueprintCallable, Category = "Demo")
+	void FinishTutorial();
+
+	UFUNCTION(BlueprintCallable, Category = "Demo")
+	void HandlePlayerDied();
+
+	UFUNCTION(BlueprintPure, Category = "Demo|Results")
+	EComboTier GetWonComboTier() const { return WonComboTier; }
+
+	UFUNCTION(BlueprintPure, Category = "Demo|Results")
+	int32 GetWonComboHits() const { return WonComboHits; }
+
+	UFUNCTION(BlueprintPure, Category = "Demo|Results")
+	int32 GetWonComboPoints() const { return WonComboPoints; }
+
+	void RefreshDemoInput();
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
@@ -47,8 +69,28 @@ protected:
 	void HandleEncounterCompleted();
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Demo")
-	EDemoPhase DemoPhase = EDemoPhase::Combat;
+	EDemoPhase DemoPhase = EDemoPhase::Tutorial;
 
 	UPROPERTY()
 	TObjectPtr<AWaveEnemyManager> WaveManager;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Demo|UI")
+	TSubclassOf<UUserWidget> TutorialWidgetClass;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Demo|UI")
+	TSubclassOf<UUserWidget> GameWonWidgetClass;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Demo|UI")
+	TSubclassOf<UUserWidget> GameOverWidgetClass;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UUserWidget> ActivePhaseWidget;
+
+private:
+	void CompleteDemoWin();
+	EComboTier WonComboTier = EComboTier::None;
+	int32 WonComboHits = 0;
+	int32 WonComboPoints = 0;
+	bool bDemoPhaseInitialized = false;
+	FTimerHandle DemoWinTimer;
 };

@@ -40,4 +40,29 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "Trick Gauge")
 	float GetMaxGauge() const { return MaxGauge; }
+
+	UFUNCTION(BlueprintPure, Category = "Trick Gauge")
+	bool IsFull() const { return MaxGauge > 0.f && CurrentGauge >= MaxGauge; }
+
+	UFUNCTION(BlueprintPure, Category = "Trick Gauge")
+	bool IsEmpty() const { return CurrentGauge <= 0.f; }
+
+	UFUNCTION(BlueprintPure, Category = "Trick Gauge")
+	float GetFillPercent() const { return MaxGauge > 0.f ? FMath::Clamp(CurrentGauge / MaxGauge, 0.f, 1.f) : 0.f; }
+
+	UFUNCTION(BlueprintCallable, Category = "Trick Gauge")
+	void FillFromHit();
+
+	UFUNCTION(BlueprintCallable, Category = "Trick Gauge")
+	void Drain(float DeltaTime);
+
+	UFUNCTION(BlueprintCallable, Category = "Trick Gauge")
+	void EmptyGauge();
+
+protected:
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Trick Gauge", meta = (ClampMin = "0.0"))
+	float GaugePerHit = 20.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Trick Gauge", meta = (ClampMin = "0.0"))
+	float DrainPerSecond = 40.f;
 };

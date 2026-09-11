@@ -10,10 +10,27 @@
 #include "Items/HealthItem.h"
 #include "Kismet/GameplayStatics.h"
 #include "TimerManager.h"
+#include "Components/SceneComponent.h"
+#include "Components/WidgetComponent.h"
+#include "Blueprint/UserWidget.h"
+
+AEnemyCharacter::AEnemyCharacter()
+{
+	HomingTargetMarker = CreateDefaultSubobject<USceneComponent>(TEXT("HomingTargetMarker"));
+	HomingTargetMarker->SetupAttachment(GetRootComponent());
+	HomingTargetMarker->SetRelativeLocation(FVector(0.f, 0.f, 80.f));
+	HomingMarkerWidget = CreateDefaultSubobject<UWidgetComponent>(TEXT("HomingMarkerWidget"));
+	HomingMarkerWidget->SetupAttachment(HomingTargetMarker);
+	HomingMarkerWidget->SetWidgetSpace(EWidgetSpace::Screen);
+	HomingMarkerWidget->SetDrawAtDesiredSize(true);
+	HomingMarkerWidget->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+}
 
 void AEnemyCharacter::BeginPlay()
 {
 	Super::BeginPlay();
+	HomingMarkerWidget->SetWidgetClass(HomingMarkerWidgetClass);
+	SetHomingTargeted_Implementation(false);
 
 	if (HealthComponent)
 	{
@@ -51,9 +68,29 @@ bool AEnemyCharacter::GetIsHomingTargeted_Implementation()
 void AEnemyCharacter::SetHomingTargeted_Implementation(bool bTargeted)
 {
 	bIsHomingTargeted = bTargeted;
+	if (HomingTargetMarker)
+	{
+		HomingTargetMarker->SetHiddenInGame(!bTargeted, true);
+		HomingTargetMarker->SetVisibility(bTargeted, true);
+	}
 }
 
 bool AEnemyCharacter::CanBeHomed_Implementation() const
+{
+	if (HealthComponent && HealthComponent->IsDead())
+	{
+		return false;
+	}
+
+	if (CharacterStateComponent && CharacterStateComponent->GetLifeState() == ECharacterLifeState::Dead)
+	{
+		return false;
+	}
+
+	return true;
+}
+
+bool AEnemyCharacter::CanGrantCombo_Implementation() const
 {
 	if (HealthComponent && HealthComponent->IsDead())
 	{
@@ -75,6 +112,7 @@ FVector AEnemyCharacter::GetTargetLocation_Implementation()
 
 void AEnemyCharacter::HandleEnemyHealthDepleted(UHealthComponent* InHealthComponent, AActor* DamageCauser)
 {
+	SetHomingTargeted_Implementation(false);
 	if (WaveManager)
 	{
 		WaveManager->RegisterEnemyDefeated(this);

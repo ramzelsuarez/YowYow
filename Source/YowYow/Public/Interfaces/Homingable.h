@@ -15,7 +15,7 @@ class UHomingable : public UInterface
 
 /**
  * These are things you can use your homing attack (home?) to, that are "homingable".
- * Enemies and I think we should be able to use this for the "grapple" mechanic too 
+ * Enemy targets for the aerial homing attack.
  */
 class YOWYOW_API IHomingable
 {

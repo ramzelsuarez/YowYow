@@ -21,6 +21,8 @@ class YOWYOW_API ASpinningRiotPlayerController : public APlayerController
 public:
 	void EnterTrickMode() const;
 	void ExitTrickMode() const;
+	bool CanUseTrickInputContext() const;
+	void ApplyDemoInputMode(bool bCombat, UUserWidget* PhaseWidget);
 
 	UFUNCTION(BlueprintCallable, Category = "Pause")
 	void TogglePauseMenu();
@@ -60,6 +62,7 @@ protected:
 	TObjectPtr<UInputAction> ToggleEnemyAIAction;
 
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	virtual void SetupInputComponent() override;
 
 private:
@@ -74,4 +77,5 @@ private:
 	FTimerHandle DeathPauseMenuTimerHandle;
 
 	bool IsPossessedPawnDead() const;
+	bool IsCombatPhase() const;
 };

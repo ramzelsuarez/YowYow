@@ -10,6 +10,7 @@ enum class EAttackType : uint8
 	Area UMETA(DisplayName = "Area"),
 	Ranged UMETA(DisplayName = "Ranged"),
 	None UMETA(DisplayName = "None"),
+	DNA UMETA(DisplayName = "DNA"),
 };
 
 UENUM(BlueprintType)
@@ -25,6 +26,8 @@ enum class EAttackMotion : uint8
 	 * one through the right side, one through the left. No full spin.
 	 */
 	OrbitCircle UMETA(DisplayName = "Orbit Circle"),
+	OrbitOwner UMETA(DisplayName = "Orbit Owner"),
+	RadialBurst UMETA(DisplayName = "Radial Burst"),
 };
 
 UENUM(BlueprintType)

@@ -32,6 +32,10 @@ public:
 
 	FAttackHitboxFinished OnFinished;
 
+	// DNA uses Eri's clock so hitstop cannot separate meshes from damage volumes.
+	void InitializeDNA(AActor* InSourceActor, const FAttackData& InAttackData, float InitialAngleDegrees);
+	void UpdateDNAMotion(float PhaseElapsed);
+
 	UPROPERTY(EditAnywhere, Category = "Debug")
 	bool bDrawDebug = true;
 
