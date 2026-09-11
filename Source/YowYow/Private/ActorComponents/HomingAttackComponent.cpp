@@ -372,7 +372,7 @@ void UHomingAttackComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 		OwnerStateComponent->GetActionState() != ECharacterActionState::Trick;
 	const ASpinningRiot* Demo = GetWorld()->GetAuthGameMode<ASpinningRiot>();
 
-	if (!bCanHomingExist || (Demo && Demo->GetDemoPhase() != EDemoPhase::Combat))
+	if (!bCanHomingExist || (Demo && Demo->GetDemoPhase() != EDemoPhase::Play))
 	{
 		if (IsHomingInFlight() || HomingState == EHomingState::Charging)
 		{

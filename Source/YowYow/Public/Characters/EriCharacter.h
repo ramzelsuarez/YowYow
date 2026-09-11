@@ -81,6 +81,10 @@ protected:
 	virtual void Tick(float DeltaTime) override;
 	virtual void Landed(const FHitResult& Hit) override;
 
+	/** Seconds between sprite visibility changes during post-hit invulnerability. */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Combat|Feedback", meta = (ClampMin = "0.05"))
+	float DamageBlinkInterval = 0.1f;
+
 	UPROPERTY(EditAnywhere, Category = "Input Actions|Movement")
 	UInputAction* MovementAction = nullptr;
 
@@ -268,6 +272,9 @@ private:
 	};
 
 	void ApplyYoYoMeshAssets();
+	void UpdateDamageBlink();
+	bool bDamageBlinkHidden = false;
+
 	void CacheYoYoRests();
 	void AttachYoYosToHandSockets();
 	void AttachYoYoToHandSocket(

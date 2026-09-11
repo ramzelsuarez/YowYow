@@ -104,6 +104,10 @@ private:
 	UPROPERTY(EditAnywhere, Category = "Attack|Combo", meta = (ClampMin = "0.0"))
 	float ComboResetTime = 0.75f;
 
+	/** Extra combo input time after Eri's yoyos return; unused by enemies. */
+	UPROPERTY(EditAnywhere, Category = "Attack|Combo", meta = (ClampMin = "0.0"))
+	float YoYoComboExtraTime = 0.2f;
+
 	UPROPERTY()
 	TArray<TObjectPtr<AAttackHitbox>> ActiveHitboxes;
 

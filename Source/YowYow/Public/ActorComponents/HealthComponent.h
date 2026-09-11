@@ -95,7 +95,7 @@ protected:
 
 private:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Health|Player", meta = (AllowPrivateAccess = "true", ClampMin = "0.0"))
-	float InvulnDuration = 0.8f;
+	float InvulnDuration = 1.2f;
 
 	double InvulnerableUntil = 0.0;
 };

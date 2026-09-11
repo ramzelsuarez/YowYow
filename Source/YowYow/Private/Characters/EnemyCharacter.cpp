@@ -13,6 +13,7 @@
 #include "Components/SceneComponent.h"
 #include "Components/WidgetComponent.h"
 #include "Blueprint/UserWidget.h"
+#include "GameFramework/CharacterMovementComponent.h"
 
 AEnemyCharacter::AEnemyCharacter()
 {
@@ -24,6 +25,14 @@ AEnemyCharacter::AEnemyCharacter()
 	HomingMarkerWidget->SetWidgetSpace(EWidgetSpace::Screen);
 	HomingMarkerWidget->SetDrawAtDesiredSize(true);
 	HomingMarkerWidget->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+}
+
+void AEnemyCharacter::PostInitializeComponents()
+{
+	// Our component drives AI without a controller. CharacterMovement must still
+	// initialize and simulate movement for LaunchCharacter to apply knockback.
+	GetCharacterMovement()->bRunPhysicsWithNoController = true;
+	Super::PostInitializeComponents();
 }
 
 void AEnemyCharacter::BeginPlay()

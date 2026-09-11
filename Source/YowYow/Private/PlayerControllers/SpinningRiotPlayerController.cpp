@@ -184,7 +184,7 @@ bool ASpinningRiotPlayerController::CanUseTrickInputContext() const
 bool ASpinningRiotPlayerController::IsCombatPhase() const
 {
 	const ASpinningRiot* Demo = GetWorld() ? GetWorld()->GetAuthGameMode<ASpinningRiot>() : nullptr;
-	return !Demo || Demo->GetDemoPhase() == EDemoPhase::Combat;
+	return !Demo || Demo->GetDemoPhase() == EDemoPhase::Play;
 }
 
 void ASpinningRiotPlayerController::ApplyDemoInputMode(bool bCombat, UUserWidget* PhaseWidget)

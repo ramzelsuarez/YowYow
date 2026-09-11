@@ -32,7 +32,7 @@ bool UAttackComponent::TryAttack(EAttackType AttackType)
 		return false;
 	}
 	const ASpinningRiot* Demo = GetWorld()->GetAuthGameMode<ASpinningRiot>();
-	if (Demo && Demo->GetDemoPhase() != EDemoPhase::Combat) return false;
+	if (Demo && Demo->GetDemoPhase() != EDemoPhase::Play) return false;
 	const UCharacterStateComponent* OwnerState = GetOwner()->FindComponentByClass<UCharacterStateComponent>();
 	if (OwnerState && OwnerState->GetActionState() == ECharacterActionState::Trick
 		&& AttackType != EAttackType::DNA) return false;
@@ -74,6 +74,8 @@ bool UAttackComponent::TryAttack(EAttackType AttackType)
 
 	if (AttackType == EAttackType::Normal)
 	{
+		// The previous gap timer must not reset the chain during this attack.
+		GetWorld()->GetTimerManager().ClearTimer(ComboResetTimer);
 		++NormalAttackIndex;
 		bActiveAttackIsNormal = true;
 	}
@@ -186,7 +188,7 @@ bool UAttackComponent::CanStartAttack() const
 		return false;
 	}
 	const ASpinningRiot* Demo = GetWorld()->GetAuthGameMode<ASpinningRiot>();
-	if (Demo && Demo->GetDemoPhase() != EDemoPhase::Combat) return false;
+	if (Demo && Demo->GetDemoPhase() != EDemoPhase::Play) return false;
 
 	if (const UHealthComponent* Health = GetOwner()->FindComponentByClass<UHealthComponent>())
 	{
@@ -462,7 +464,9 @@ void UAttackComponent::RestartNormalComboTimer()
 
 	GetWorld()->GetTimerManager().ClearTimer(ComboResetTimer);
 
-	if (ComboResetTime <= 0.f)
+	const float ComboWindow = ComboResetTime
+		+ (bRequiresPresentationComplete ? YoYoComboExtraTime : 0.f);
+	if (ComboWindow <= 0.f)
 	{
 		ResetNormalCombo();
 		return;
@@ -472,7 +476,7 @@ void UAttackComponent::RestartNormalComboTimer()
 		ComboResetTimer,
 		this,
 		&UAttackComponent::ResetNormalCombo,
-		ComboResetTime,
+		ComboWindow,
 		false
 	);
 }

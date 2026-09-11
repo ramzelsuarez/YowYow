@@ -24,7 +24,7 @@ void ASpinningRiot::BeginPlay()
 	{
 		UE_LOG(LogTemp, Warning, TEXT("%s found no WaveEnemyManager."), *GetName());
 	}
-	SetDemoPhase(TutorialWidgetClass ? EDemoPhase::Tutorial : EDemoPhase::Combat);
+	SetDemoPhase(EDemoPhase::Play);
 	if (WaveManager && WaveManager->IsEncounterCompleted()) HandleEncounterCompleted();
 }
 
@@ -44,23 +44,19 @@ void ASpinningRiot::RefreshDemoInput()
 	if (!ActivePhaseWidget)
 	{
 		TSubclassOf<UUserWidget> PhaseClass;
-		if (DemoPhase == EDemoPhase::Tutorial) PhaseClass = TutorialWidgetClass;
-		else if (DemoPhase == EDemoPhase::GameWon) PhaseClass = GameWonWidgetClass;
-		else if (DemoPhase == EDemoPhase::GameOver) PhaseClass = GameOverWidgetClass;
+		if (DemoPhase == EDemoPhase::Win) PhaseClass = GameWonWidgetClass;
+		else if (DemoPhase == EDemoPhase::Lose) PhaseClass = GameOverWidgetClass;
 		if (PhaseClass)
 		{
 			ActivePhaseWidget = CreateWidget<UUserWidget>(DemoController, PhaseClass);
 			if (ActivePhaseWidget) ActivePhaseWidget->AddToViewport(200);
 		}
 	}
-	DemoController->ApplyDemoInputMode(DemoPhase == EDemoPhase::Combat, ActivePhaseWidget);
+	DemoController->ApplyDemoInputMode(DemoPhase == EDemoPhase::Play, ActivePhaseWidget);
 }
 
 void ASpinningRiot::SetDemoPhase(EDemoPhase NewPhase)
 {
-	// Only the four playable phases are accepted; old serialized values stay inert.
-	if (NewPhase != EDemoPhase::Combat && NewPhase != EDemoPhase::Tutorial
-		&& NewPhase != EDemoPhase::GameWon && NewPhase != EDemoPhase::GameOver) return;
 	if (bDemoPhaseInitialized && NewPhase == DemoPhase) return;
 	const EDemoPhase OldPhase = DemoPhase;
 	DemoPhase = NewPhase;
@@ -70,7 +66,7 @@ void ASpinningRiot::SetDemoPhase(EDemoPhase NewPhase)
 		ActivePhaseWidget->RemoveFromParent();
 		ActivePhaseWidget = nullptr;
 	}
-	const bool bCombat = DemoPhase == EDemoPhase::Combat;
+	const bool bCombat = DemoPhase == EDemoPhase::Play;
 	UEnemyAIComponent::SetGlobalAIFrozen(!bCombat);
 	if (!bCombat)
 	{
@@ -89,30 +85,23 @@ void ASpinningRiot::SetDemoPhase(EDemoPhase NewPhase)
 	OnDemoPhaseChanged.Broadcast(OldPhase, NewPhase);
 }
 
-void ASpinningRiot::FinishTutorial()
-{
-	if (DemoPhase != EDemoPhase::Tutorial) return;
-	SetDemoPhase(EDemoPhase::Combat);
-	if (WaveManager && WaveManager->IsEncounterCompleted()) HandleEncounterCompleted();
-}
-
 void ASpinningRiot::HandlePlayerDied()
 {
-	if (DemoPhase != EDemoPhase::Combat) return;
+	if (DemoPhase != EDemoPhase::Play) return;
 	GetWorldTimerManager().ClearTimer(DemoWinTimer);
-	SetDemoPhase(EDemoPhase::GameOver);
+	SetDemoPhase(EDemoPhase::Lose);
 }
 
 void ASpinningRiot::HandleEncounterCompleted()
 {
-	if (DemoPhase != EDemoPhase::Combat || GetWorldTimerManager().TimerExists(DemoWinTimer)) return;
+	if (DemoPhase != EDemoPhase::Play || GetWorldTimerManager().TimerExists(DemoWinTimer)) return;
 	// Leave the damage callback before canceling presentations and creating result UI.
 	DemoWinTimer = GetWorldTimerManager().SetTimerForNextTick(this, &ASpinningRiot::CompleteDemoWin);
 }
 
 void ASpinningRiot::CompleteDemoWin()
 {
-	if (DemoPhase != EDemoPhase::Combat) return;
+	if (DemoPhase != EDemoPhase::Play) return;
 	APawn* PlayerPawn = UGameplayStatics::GetPlayerPawn(this, 0);
 	if (const ACharacterBase* PlayerCharacter = Cast<ACharacterBase>(PlayerPawn))
 	{
@@ -131,5 +120,5 @@ void ASpinningRiot::CompleteDemoWin()
 			WonComboPoints = Combo->GetCurrentPoints();
 		}
 	}
-	SetDemoPhase(EDemoPhase::GameWon);
+	SetDemoPhase(EDemoPhase::Win);
 }

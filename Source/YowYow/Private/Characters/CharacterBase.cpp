@@ -84,7 +84,7 @@ float ACharacterBase::TakeDamage(
 )
 {
 	const ASpinningRiot* Demo = GetWorld()->GetAuthGameMode<ASpinningRiot>();
-	if ((Demo && Demo->GetDemoPhase() != EDemoPhase::Combat)
+	if ((Demo && Demo->GetDemoPhase() != EDemoPhase::Play)
 		|| (HealthComponent && HealthComponent->IsInvulnerable())) return 0.f;
 	if (HealthComponent && HealthComponent->IsDead())
 	{
@@ -128,7 +128,7 @@ void ACharacterBase::DoMove(float Right, float Forward)
 bool ACharacterBase::DoAttack(EAttackType AttackType)
 {
 	const ASpinningRiot* Demo = GetWorld()->GetAuthGameMode<ASpinningRiot>();
-	if (Demo && Demo->GetDemoPhase() != EDemoPhase::Combat) return false;
+	if (Demo && Demo->GetDemoPhase() != EDemoPhase::Play) return false;
 	if (CharacterStateComponent && CharacterStateComponent->GetActionState() == ECharacterActionState::Trick
 		&& AttackType != EAttackType::DNA) return false;
 	if (!AttackComponent)
@@ -177,7 +177,7 @@ void ACharacterBase::StopJumping()
 bool ACharacterBase::CanMove()
 {
 	const ASpinningRiot* Demo = GetWorld()->GetAuthGameMode<ASpinningRiot>();
-	if (Demo && Demo->GetDemoPhase() != EDemoPhase::Combat) return false;
+	if (Demo && Demo->GetDemoPhase() != EDemoPhase::Play) return false;
 	if (CharacterStateComponent && CharacterStateComponent->GetActionState() == ECharacterActionState::Trick) return false;
 	if (IsDead())
 	{

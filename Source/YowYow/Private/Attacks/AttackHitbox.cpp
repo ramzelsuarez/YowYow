@@ -346,7 +346,7 @@ void AAttackHitbox::HandleHit(AActor* HitActor)
 		return;
 	}
 	const ASpinningRiot* Demo = GetWorld()->GetAuthGameMode<ASpinningRiot>();
-	if (Demo && Demo->GetDemoPhase() != EDemoPhase::Combat) return;
+	if (Demo && Demo->GetDemoPhase() != EDemoPhase::Play) return;
 	if (const UHealthComponent* HitHealth = HitActor->FindComponentByClass<UHealthComponent>())
 	{
 		if (HitHealth->IsDead() || HitHealth->IsInvulnerable()) return;
@@ -371,7 +371,7 @@ void AAttackHitbox::HandleHit(AActor* HitActor)
 	);
 
 	if (IsActorBeingDestroyed() || !IsValid(HitActor) || !SourceActor.IsValid()) return;
-	if (Demo && Demo->GetDemoPhase() != EDemoPhase::Combat) return;
+	if (Demo && Demo->GetDemoPhase() != EDemoPhase::Play) return;
 
 	// Away from attacker (horizontal). Works for player hits on enemies and vice versa.
 	FVector KnockbackDir = HitActor->GetActorLocation() - SourceActor->GetActorLocation();

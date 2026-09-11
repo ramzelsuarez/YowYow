@@ -58,7 +58,7 @@ void UEnemyAIComponent::TickComponent(float DeltaTime, ELevelTick TickType, FAct
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 	if (!IsValid(PlayerPawn)) PlayerPawn = UGameplayStatics::GetPlayerPawn(this, 0);
 	const ASpinningRiot* Demo = GetWorld()->GetAuthGameMode<ASpinningRiot>();
-	if (Demo && Demo->GetDemoPhase() != EDemoPhase::Combat) return;
+	if (Demo && Demo->GetDemoPhase() != EDemoPhase::Play) return;
 
 	if (bGlobalAIFrozen)
 	{
@@ -87,6 +87,13 @@ bool UEnemyAIComponent::CanAct() const
 
 	// Hitstop: don't override launch with chase movement.
 	if (OwnerCharacter->CustomTimeDilation < 0.95f)
+	{
+		return false;
+	}
+
+	// LaunchCharacter queues the impulse until CharacterMovement's next update.
+	// Don't chase or stop for a ranged attack before that update has applied it.
+	if (!OwnerCharacter->GetCharacterMovement()->PendingLaunchVelocity.IsNearlyZero())
 	{
 		return false;
 	}

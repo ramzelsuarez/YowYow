@@ -13,11 +13,10 @@ class UUserWidget;
 UENUM(BlueprintType)
 enum class EDemoPhase : uint8
 {
-	Combat UMETA(DisplayName = "Combat"),
-	Puzzle UMETA(DisplayName = "Puzzle (Deprecated)"), // Retained serialized value; never entered.
-	Tutorial UMETA(DisplayName = "Tutorial"),
-	GameWon UMETA(DisplayName = "Game Won"),
-	GameOver UMETA(DisplayName = "Game Over"),
+	// Preserve the numeric values of the existing gameplay and result phases.
+	Play = 0 UMETA(DisplayName = "Play"),
+	Win = 3 UMETA(DisplayName = "Win"),
+	Lose = 4 UMETA(DisplayName = "Lose"),
 };
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(
@@ -43,9 +42,6 @@ public:
 	FOnDemoPhaseChanged OnDemoPhaseChanged;
 
 	UFUNCTION(BlueprintCallable, Category = "Demo")
-	void FinishTutorial();
-
-	UFUNCTION(BlueprintCallable, Category = "Demo")
 	void HandlePlayerDied();
 
 	UFUNCTION(BlueprintPure, Category = "Demo|Results")
@@ -69,13 +65,10 @@ protected:
 	void HandleEncounterCompleted();
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Demo")
-	EDemoPhase DemoPhase = EDemoPhase::Tutorial;
+	EDemoPhase DemoPhase = EDemoPhase::Play;
 
 	UPROPERTY()
 	TObjectPtr<AWaveEnemyManager> WaveManager;
-
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Demo|UI")
-	TSubclassOf<UUserWidget> TutorialWidgetClass;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Demo|UI")
 	TSubclassOf<UUserWidget> GameWonWidgetClass;

@@ -2,6 +2,7 @@
 
 
 #include "ActorComponents/HealthComponent.h"
+#include "Characters/EriCharacter.h"
 #include "GameFramework/Pawn.h"
 #include "Engine/World.h"
 #include "GameModes/SpinningRiot.h"
@@ -51,7 +52,7 @@ void UHealthComponent::HandleOwnerTakeAnyDamage(
 {
 	const ASpinningRiot* Demo = GetWorld() ? GetWorld()->GetAuthGameMode<ASpinningRiot>() : nullptr;
 	if (!DamagedActor || bIsDead || Damage <= 0.f || IsInvulnerable()
-		|| (Demo && Demo->GetDemoPhase() != EDemoPhase::Combat))
+		|| (Demo && Demo->GetDemoPhase() != EDemoPhase::Play))
 	{
 		return;
 	}
@@ -91,6 +92,11 @@ void UHealthComponent::HandleOwnerTakeAnyDamage(
 
 bool UHealthComponent::IsInvulnerable() const
 {
+	// QTE and both DNA phases share the same lifetime as the trick input lock.
+	if (const AEriCharacter* Eri = Cast<AEriCharacter>(GetOwner()))
+	{
+		if (Eri->IsTrickInputLocked()) return true;
+	}
 	const APawn* HealthPawn = Cast<APawn>(GetOwner());
 	return HealthPawn && HealthPawn->IsPlayerControlled() && GetWorld()
 		&& GetWorld()->GetTimeSeconds() < InvulnerableUntil;

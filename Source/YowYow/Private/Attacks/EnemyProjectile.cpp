@@ -44,7 +44,7 @@ void AEnemyProjectile::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 	const ASpinningRiot* Demo = GetWorld()->GetAuthGameMode<ASpinningRiot>();
-	if (Demo && Demo->GetDemoPhase() != EDemoPhase::Combat) Destroy();
+	if (Demo && Demo->GetDemoPhase() != EDemoPhase::Play) Destroy();
 }
 
 void AEnemyProjectile::HandleProjectileOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor,

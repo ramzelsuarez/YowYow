@@ -6,6 +6,7 @@
 #include "ActorComponents/AttackComponent.h"
 #include "ActorComponents/CharacterStateComponent.h"
 #include "ActorComponents/ComboComponent.h"
+#include "ActorComponents/HealthComponent.h"
 #include "ActorComponents/HomingAttackComponent.h"
 #include "ActorComponents/TrickGaugeComponent.h"
 #include "Attacks/AttackHitbox.h"
@@ -136,6 +137,11 @@ void AEriCharacter::BeginPlay()
 
 void AEriCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	if (bDamageBlinkHidden && GetSprite())
+	{
+		GetSprite()->SetVisibility(true);
+		bDamageBlinkHidden = false;
+	}
 	SetTrickKeyboardContextEnabled(false);
 	ClearDNAHitboxes();
 	SetHomingCameraLocked(false);
@@ -166,6 +172,7 @@ void AEriCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
 void AEriCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+	UpdateDamageBlink();
 	if (IsDead() && IsTrickInputLocked())
 	{
 		CancelDemoActions();
@@ -184,6 +191,27 @@ void AEriCharacter::Tick(float DeltaTime)
 	}
 	UpdateYoYoPresentation(DeltaTime);
 	UpdateHomingCameraLock(DeltaTime);
+}
+
+void AEriCharacter::UpdateDamageBlink()
+{
+	UPaperFlipbookComponent* EriSprite = GetSprite();
+	if (!EriSprite) return;
+
+	const ASpinningRiot* Demo = GetWorld()->GetAuthGameMode<ASpinningRiot>();
+	// Trick has its own aura/animations; blinking is only for post-hit protection.
+	const bool bBlinking = !IsTrickInputLocked() && HealthComponent && HealthComponent->IsInvulnerable() && !IsDead()
+		&& (!Demo || Demo->GetDemoPhase() == EDemoPhase::Play);
+	const float Interval = FMath::Max(DamageBlinkInterval, 0.05f);
+	// Use the same world clock as health, so pause and hitstop cannot desync the feedback.
+	const bool bHideSprite = bBlinking
+		&& FMath::Fmod(GetWorld()->GetTimeSeconds(), Interval * 2.f) < Interval;
+	if (bHideSprite != bDamageBlinkHidden)
+	{
+		bDamageBlinkHidden = bHideSprite;
+		// Only the sprite blinks; attached yoyos and their effects keep their own visibility.
+		EriSprite->SetVisibility(!bDamageBlinkHidden);
+	}
 }
 
 void AEriCharacter::ApplyYoYoMeshAssets()
@@ -841,7 +869,7 @@ void AEriCharacter::Look(const FInputActionValue& Value)
 		return;
 	}
 	const ASpinningRiot* Demo = GetWorld()->GetAuthGameMode<ASpinningRiot>();
-	if (Demo && Demo->GetDemoPhase() != EDemoPhase::Combat) return;
+	if (Demo && Demo->GetDemoPhase() != EDemoPhase::Play) return;
 	// Homing only has a back-facing sprite — lock view behind Eri during the dash.
 	if (bHomingCameraLocked)
 	{
@@ -915,7 +943,7 @@ void AEriCharacter::EnterTrickMode()
 	if (IsDead() || IsTrickInputLocked() || !TrickGaugeComponent || !TrickGaugeComponent->IsFull()
 		|| !CharacterStateComponent || !AttackComponent || !AttackData || AttackComponent->IsAttackActive()
 		|| IsYoYoPresentationActive() || !TrickController || !TrickController->CanUseTrickInputContext()
-		|| (Demo && Demo->GetDemoPhase() != EDemoPhase::Combat)
+		|| (Demo && Demo->GetDemoPhase() != EDemoPhase::Play)
 		|| (HomingAttackComponent && HomingAttackComponent->IsHomingInFlight()))
 	{
 		return;
